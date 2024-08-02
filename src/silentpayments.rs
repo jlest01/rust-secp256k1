@@ -136,16 +136,16 @@ pub fn silentpayments_test_outputs<C: Verification>(
         // println!();
 
         if x == 1 {
-            println!("{}:", "out_pubkeys");
             for out_pubkey in out_pubkeys {
                 // let xonlypubkey = *Box::from_raw(i);
                 // result_out_pubkeys.push(XOnlyPublicKey::from(xonlypubkey));
-                let result = XOnlyPublicKey::from(out_pubkey.to_owned());
+                let pubkey = XOnlyPublicKey::from(out_pubkey.to_owned());
+                result_out_pubkeys.push(XOnlyPublicKey::from(pubkey.to_owned()));
                 
-                for i in result.serialize().iter().cloned() {
-                    print!("{:02x}", i);
-                }
-                println!();
+                // for i in result.serialize().iter().cloned() {
+                //     print!("{:02x}", i);
+                // }
+                // println!();
             }
         }
 
