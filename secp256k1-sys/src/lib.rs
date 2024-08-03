@@ -852,6 +852,40 @@ extern "C" {
         internal_pubkey: *const XOnlyPublicKey,
         tweak32: *const c_uchar,
     ) -> c_int;
+
+    #[cfg_attr(not(rust_secp_no_symbol_renaming), link_name = "rustsecp256k1_v0_10_0_silentpayments_test_outputs")]
+    pub fn secp256k1_silentpayments_test_outputs(
+        cx: *const Context,
+        generated_outputs: *mut *mut XOnlyPublicKey,
+        recipients: *const *const SilentpaymentsRecipient,
+        n_recipients: size_t,
+        outpoint_smallest36: *const c_uchar,
+        taproot_seckeys: *const *const Keypair,
+        n_taproot_seckeys: size_t,
+        plain_seckeys: *const *const c_uchar,
+        n_plain_seckeys: size_t,
+        output36: *mut c_uchar,
+        taproot_outputs: *mut XOnlyPublicKey,
+        plain_outputs: *mut PublicKey,
+    ) -> c_int;
+
+
+    /*
+    int rustsecp256k1_v0_10_0_silentpayments_test_outputs(
+    const rustsecp256k1_v0_10_0_context *ctx,
+    rustsecp256k1_v0_10_0_xonly_pubkey **generated_outputs,
+    const rustsecp256k1_v0_10_0_silentpayments_recipient **recipients,
+    size_t n_recipients,
+    const unsigned char *outpoint_smallest36,
+    const rustsecp256k1_v0_10_0_keypair * const *taproot_seckeys,
+    size_t n_taproot_seckeys,
+    const unsigned char * const *plain_seckeys,
+    size_t n_plain_seckeys,
+    unsigned char *output36,
+    rustsecp256k1_v0_10_0_xonly_pubkey *taproot_outputs,
+    rustsecp256k1_v0_10_0_pubkey *plain_outputs
+)
+     */
 }
 
 /// A reimplementation of the C function `secp256k1_context_create` in rust.
@@ -1083,6 +1117,46 @@ impl <T: CPtr> CPtr for Option<T> {
         }
     }
 }
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct SilentpaymentsRecipient {
+    scan_pubkey: PublicKey,
+    spend_pubkey: PublicKey,
+    index: size_t,
+}
+
+impl SilentpaymentsRecipient {
+    pub fn new(scan_pubkey: &PublicKey,  spend_pubkey: &PublicKey, index: usize) -> Self {
+        Self {
+            scan_pubkey: scan_pubkey.clone(),
+            spend_pubkey: spend_pubkey.clone(),
+            index
+        }
+    }
+}
+
+impl core::fmt::Debug for SilentpaymentsRecipient {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SilentpaymentsRecipient")
+            .field("scan_pubkey", &self.scan_pubkey)
+            .field("spend_pubkey", &self.spend_pubkey)
+            .field("index", &self.index)
+            .finish()
+    }
+}
+
+#[cfg(not(secp256k1_fuzz))]
+impl PartialEq for SilentpaymentsRecipient {
+    fn eq(&self, other: &Self) -> bool {
+        self.scan_pubkey == other.scan_pubkey &&
+        self.spend_pubkey == other.spend_pubkey &&
+        self.index == other.index
+    }
+}
+
+#[cfg(not(secp256k1_fuzz))]
+impl Eq for SilentpaymentsRecipient {}
 
 #[cfg(secp256k1_fuzz)]
 mod fuzz_dummy {

@@ -10,7 +10,7 @@ fi
 SECP_SYS="$SECP_VENDOR_GIT_ROOT"/secp256k1-sys
 DEFAULT_VERSION_CODE=$(grep "^version" "$SECP_SYS/Cargo.toml" | sed 's/\./_/g' | sed 's/.*"\(.*\)".*/\1/')
 DEFAULT_DEPEND_DIR="$SECP_SYS/depend"
-DEFAULT_SECP_REPO=https://github.com/bitcoin-core/secp256k1.git
+DEFAULT_SECP_REPO=https://github.com/jlest01/secp256k1.git
 
 : "${SECP_VENDOR_VERSION_CODE:=$DEFAULT_VERSION_CODE}"
 : "${SECP_VENDOR_DEPEND_DIR:=$DEFAULT_DEPEND_DIR}"
