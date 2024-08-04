@@ -92,7 +92,7 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
     smallest_outpoint: &[u8; 36],
     taproot_seckeys: Option<&[Keypair]>,
     plain_seckeys: Option<&[SecretKey]>,
-) -> Result<Vec<XOnlyPublicKey>, &'static str> {
+) -> Result<Vec<XOnlyPublicKey>, SenderOutputCreationError> {
     let cx = secp.ctx().as_ptr();
     let n_tx_outputs = recipients.len();
 
@@ -151,9 +151,50 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
         if res == 1 {
             Ok(out_pubkeys.into_iter().map(XOnlyPublicKey::from).collect())
         } else {
-            Err("silentpayments_test_outputs failed")
+            Err(SenderOutputCreationError::Failure)
         }
     };
 
     result
+}
+
+/// Struct to store label tweak result
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LabelTweakResult {
+    /// Public key
+    pub pubkey: PublicKey,
+    /// Label tweak
+    pub label_tweak: [u8; 32],
+}
+
+/// lorem ipsum
+pub fn secp256k1_silentpayments_recipient_create_label_tweak<C: Verification>(
+    secp: &Secp256k1<C>,
+    recipient_scan_key: &SecretKey,
+    m: u32,
+) -> Result<LabelTweakResult, &'static str> {
+
+    let cx = secp.ctx().as_ptr();
+    unsafe {
+
+        let mut pubkey = ffi::PublicKey::new();
+        let mut label_tweak32 = [0u8; 32];
+
+        let res = ffi::secp256k1_silentpayments_recipient_create_label_tweak(
+            cx,
+            &mut pubkey,
+            label_tweak32.as_mut_c_ptr(),
+            recipient_scan_key.as_c_ptr(),
+            m,
+        );
+
+        if res == 1 {
+            let pubkey = PublicKey::from(pubkey);
+            let label_tweak = label_tweak32;
+
+            return Ok(LabelTweakResult { pubkey, label_tweak });
+        } else {
+            return Err("Failed to create label tweak");
+        }
+    }
 }

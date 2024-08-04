@@ -867,18 +867,14 @@ extern "C" {
     ) -> c_int;
 
 
-    /*
-    int rustsecp256k1_v0_10_0_silentpayments_sender_create_outputs(
-    const rustsecp256k1_v0_10_0_context *ctx,
-    rustsecp256k1_v0_10_0_xonly_pubkey **generated_outputs,
-    const rustsecp256k1_v0_10_0_silentpayments_recipient **recipients,
-    size_t n_recipients,
-    const unsigned char *outpoint_smallest36,
-    const rustsecp256k1_v0_10_0_keypair * const *taproot_seckeys,
-    size_t n_taproot_seckeys,
-    const unsigned char * const *plain_seckeys,
-    size_t n_plain_seckeys
-) */
+    #[cfg_attr(not(rust_secp_no_symbol_renaming), link_name = "rustsecp256k1_v0_10_0_silentpayments_recipient_create_label_tweak")]
+    pub fn secp256k1_silentpayments_recipient_create_label_tweak(
+        cx: *const Context,
+        pubkey: *mut PublicKey,
+        label_tweak32: *mut c_uchar,
+        recipient_scan_key: *const c_uchar,
+        m: c_uint,
+    ) -> c_int;
 }
 
 /// A reimplementation of the C function `secp256k1_context_create` in rust.
@@ -1150,6 +1146,62 @@ impl PartialEq for SilentpaymentsRecipient {
 
 #[cfg(not(secp256k1_fuzz))]
 impl Eq for SilentpaymentsRecipient {}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct SilentpaymentsFoundOutput {
+    tweak: [u8; 32],
+    found_with_label: bool,
+    label: PublicKey,
+}
+
+impl SilentpaymentsFoundOutput {
+    pub fn new(tweak: &[u8; 32],  found_with_label: bool, label: &PublicKey) -> Self {
+        Self {
+            tweak: tweak.clone(),
+            found_with_label,
+            label: label.clone(),
+        }
+    }
+}
+
+#[cfg(not(secp256k1_fuzz))]
+impl PartialEq for SilentpaymentsFoundOutput {
+    fn eq(&self, other: &Self) -> bool {
+        self.tweak == other.tweak &&
+        self.found_with_label == other.found_with_label &&
+        self.label == other.label
+    }
+}
+
+#[cfg(not(secp256k1_fuzz))]
+impl Eq for SilentpaymentsFoundOutput {}
+
+/// Opaque data structure that holds silent payments public input data.
+///
+/// This structure does not contain secret data. Guaranteed to be 98 bytes in
+/// size. It can be safely copied/moved. Created with
+/// `secp256k1_silentpayments_public_data_create`. Can be serialized as a
+/// compressed public key using
+/// `secp256k1_silentpayments_public_data_serialize`. The serialization is
+/// intended for sending the public input data to light clients. Light clients
+/// can use this serialization with
+/// `secp256k1_silentpayments_public_data_parse`.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SilentpaymentsPublicData([u8; 98]);
+
+impl SilentpaymentsPublicData {
+    pub fn from_array(arr: [u8; 98]) -> Self {
+        SilentpaymentsPublicData(arr)
+    }
+    pub fn to_array(self) -> [u8; 98] {
+        self.0
+    }
+}
+
+impl_array_newtype!(SilentpaymentsPublicData, u8, 98);
+impl_raw_debug!(SilentpaymentsPublicData);
 
 #[cfg(secp256k1_fuzz)]
 mod fuzz_dummy {

@@ -3,7 +3,17 @@ extern crate secp256k1;
 use core::ffi;
 
 use secp256k1::{Keypair, PublicKey, Secp256k1, SecretKey};
-use secp256k1::silentpayments::{silentpayments_sender_create_outputs, SilentpaymentsRecipient};
+use secp256k1::silentpayments::{secp256k1_silentpayments_recipient_create_label_tweak, silentpayments_sender_create_outputs, SilentpaymentsRecipient};
+
+struct LabelCacheEntry {
+    label: [u8; 33],
+    label_tweak: [u8; 32],
+}
+
+struct LabelsCache {
+    entries_used: usize,
+    entries: [LabelCacheEntry; 5],
+}
 
 fn main() {
 
@@ -38,6 +48,13 @@ fn main() {
         0xbc, 0x6f, 0x35, 0xf6, 0x05, 0xc6, 0x75, 0x4c, 0xfe,
         0xad, 0x57, 0xcf, 0x83, 0x87, 0x63, 0x9d, 0x3b, 0x40,
         0x96, 0xc5, 0x4f, 0x18, 0xf4, 0x00, 0x00, 0x00, 0x00
+    ];
+
+    let bob_scan_seckey: [u8; 32] = [
+        0xa8, 0x90, 0x54, 0xc9, 0x5b, 0xe3, 0xc3, 0x01,
+        0x56, 0x65, 0x74, 0xf2, 0xaa, 0x93, 0xad, 0xe0,
+        0x51, 0x85, 0x09, 0x03, 0xa6, 0x9c, 0xbd, 0xd1,
+        0xd4, 0x7e, 0xae, 0x26, 0x3d, 0x7b, 0xc0, 0x31
     ];
 
     let bob_address: [[u8; 33]; 2] = [
@@ -217,5 +234,23 @@ fn main() {
         }
         println!();
     }
+
+    let bob_scan_secretkey = SecretKey::from_slice(&bob_scan_seckey).unwrap();
+    let m: u32 = 1;
+
+    let label_tweak_result = secp256k1_silentpayments_recipient_create_label_tweak(&secp, &bob_scan_secretkey, m).unwrap();
+
+    println!("{}:", "Bob created the following label tweak:");
+    print!("\t{} : 0x", "label_tweak");
+    for byte in label_tweak_result.label_tweak.iter().cloned() {
+        print!("{:02x}", byte);
+    }
+    println!();
+    println!("{}:", "Bob created the following public key:");
+    print!("\t{} : 0x", "pubkey");
+    for byte in label_tweak_result.pubkey.serialize().iter().cloned() {
+        print!("{:02x}", byte);
+    }
+    println!();
 
 }
