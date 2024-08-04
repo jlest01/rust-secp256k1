@@ -93,109 +93,67 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
     taproot_seckeys: Option<&[Keypair]>,
     plain_seckeys: Option<&[SecretKey]>,
 ) -> Result<Vec<XOnlyPublicKey>, &'static str> {
-
     let cx = secp.ctx().as_ptr();
+    let n_tx_outputs = recipients.len();
 
-    let mut result_out_pubkeys = Vec::<XOnlyPublicKey>::new();
+    let ffi_recipients: Vec<ffi::SilentpaymentsRecipient> = recipients.iter().map(|r| r.0.clone()).collect();
+    let ffi_recipients_ptrs: Vec<_> = ffi_recipients.iter().map(|r| r as *const _).collect();
+
+    // Create vectors to hold the data, ensuring it stays in scope
+    let mut ffi_taproot_seckeys = Vec::new();
+    let mut ffi_taproot_seckeys_ptrs = Vec::new();
+    let mut plain_seckeys_u8_array = Vec::new();
+    let mut plain_seckeys_ptrs = Vec::new();
+
+    // Populate taproot seckeys if provided
+    if let Some(taproot_seckeys) = taproot_seckeys {
+        ffi_taproot_seckeys = taproot_seckeys
+            .iter()
+            .map(|tap_keypair| unsafe { (*tap_keypair.as_c_ptr()).clone() })
+            .collect();
+        ffi_taproot_seckeys_ptrs = ffi_taproot_seckeys
+            .iter()
+            .map(|keypair| keypair as *const ffi::Keypair)
+            .collect();
+    }
+
+    // Populate plain seckeys if provided
+    if let Some(plain_seckeys) = plain_seckeys {
+        plain_seckeys_u8_array = plain_seckeys
+            .iter()
+            .map(|k| k.secret_bytes())
+            .collect();
+        plain_seckeys_ptrs = plain_seckeys_u8_array
+            .iter()
+            .map(|k| k.as_ptr())
+            .collect();
+    }
+
+    let n_taproot_seckeys = ffi_taproot_seckeys.len();
+    let n_plain_seckeys = plain_seckeys_u8_array.len();
 
     let result = unsafe {
-
-        let n_tx_outputs: usize = recipients.len();
-
-        let mut ffi_recipients = Vec::<ffi::SilentpaymentsRecipient>::new();
-        let mut ffi_recipients_ptrs: Vec<*const ffi::SilentpaymentsRecipient> = vec![std::ptr::null(); n_tx_outputs];
-
-        for recipient in recipients {
-            let x = recipient.0;
-            ffi_recipients.push(x.clone());
-        }
-
-        for i in 0..n_tx_outputs {
-            ffi_recipients_ptrs[i] = &ffi_recipients[i] as *const ffi::SilentpaymentsRecipient;
-        }
-
-        let mut ffi_taproot_seckeys = Vec::<ffi::Keypair>::new();
-        let mut ffi_taproot_seckeys_ptrs: Vec<*const ffi::Keypair> = vec![std::ptr::null(); 0];
-
-        if taproot_seckeys.is_some() {
-
-            let taproot_seckeys = taproot_seckeys.unwrap();
-
-            ffi_taproot_seckeys_ptrs = vec![std::ptr::null(); taproot_seckeys.len()];
-
-            for tap_keypair in taproot_seckeys {
-                let x = tap_keypair.as_c_ptr();
-                ffi_taproot_seckeys.push((*x).clone());
-            }
-    
-            for i in 0..taproot_seckeys.len() {
-                ffi_taproot_seckeys_ptrs[i] = &ffi_taproot_seckeys[i] as *const ffi::Keypair;
-            }
-        }
-
-        let (taproot_seckeys_ptrs, n_taproot_seckeys) = if ffi_taproot_seckeys_ptrs.len() > 0 {
-            (ffi_taproot_seckeys_ptrs.as_c_ptr(), ffi_taproot_seckeys_ptrs.len())
-        } else {
-            (std::ptr::null(), 0)
-        };
-
-        let mut plain_seckeys_u8_array = Vec::<[u8; 32]>::new();
-        let mut plain_seckeys_ptrs: Vec<*const u8> = vec![std::ptr::null(); 0];
-
-        if plain_seckeys.is_some() {
-            let plain_seckeys = plain_seckeys.unwrap();
-
-            plain_seckeys_ptrs = vec![std::ptr::null(); plain_seckeys.len()];
-
-            for plain_seckey in plain_seckeys {
-                let x = plain_seckey.secret_bytes();
-                plain_seckeys_u8_array.push(x.clone());
-            }
-    
-            for i in 0..plain_seckeys_u8_array.len() {
-                plain_seckeys_ptrs[i] = &plain_seckeys_u8_array[i] as *const u8;
-            }
-        }
-
-        let (plain_seckeys_pointers, n_plain_seckeys) = if plain_seckeys_ptrs.len() > 0 {
-            (plain_seckeys_ptrs.as_c_ptr(), plain_seckeys_ptrs.len())
-        } else {
-            (std::ptr::null(), 0)
-        };
-        
-
-        let mut out_pubkeys: Vec<ffi::XOnlyPublicKey> = vec![ffi::XOnlyPublicKey::new(); n_tx_outputs];
-        let mut out_pubkeys_ptrs: Vec<*mut ffi::XOnlyPublicKey> = vec![std::ptr::null_mut(); n_tx_outputs];
-
-        for i in 0..n_tx_outputs {
-            out_pubkeys_ptrs[i] = &mut out_pubkeys[i] as *mut ffi::XOnlyPublicKey;
-        }
+        let mut out_pubkeys = vec![ffi::XOnlyPublicKey::new(); n_tx_outputs];
+        let mut out_pubkeys_ptrs: Vec<_> = out_pubkeys.iter_mut().map(|k| k as *mut _).collect();
 
         let res = secp256k1_silentpayments_sender_create_outputs(
             cx,
-            out_pubkeys_ptrs.as_mut_c_ptr(),
-            ffi_recipients_ptrs.as_c_ptr(),
-            recipients.len(),
-            smallest_outpoint.as_c_ptr(),
-            taproot_seckeys_ptrs,
+            out_pubkeys_ptrs.as_mut_ptr(),
+            ffi_recipients_ptrs.as_ptr(),
+            n_tx_outputs,
+            smallest_outpoint.as_ptr(),
+            if !ffi_taproot_seckeys_ptrs.is_empty() { ffi_taproot_seckeys_ptrs.as_ptr() } else { std::ptr::null() },
             n_taproot_seckeys,
-            plain_seckeys_pointers,
+            if !plain_seckeys_ptrs.is_empty() { plain_seckeys_ptrs.as_ptr() } else { std::ptr::null() },
             n_plain_seckeys,
         );
 
         if res == 1 {
-            for out_pubkey in out_pubkeys {
-                let pubkey = XOnlyPublicKey::from(out_pubkey.to_owned());
-                result_out_pubkeys.push(XOnlyPublicKey::from(pubkey.to_owned()));
-            }
+            Ok(out_pubkeys.into_iter().map(XOnlyPublicKey::from).collect())
+        } else {
+            Err("silentpayments_test_outputs failed")
         }
-
-        res
     };
 
-    if result == 1 {
-        Ok(result_out_pubkeys)
-    } else {
-        Err("silentpayments_test_outputs failed")
-    }
+    result
 }
