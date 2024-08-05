@@ -2,8 +2,8 @@ extern crate secp256k1;
 
 use core::ffi;
 
-use secp256k1::{Keypair, PublicKey, Secp256k1, SecretKey};
-use secp256k1::silentpayments::{secp256k1_silentpayments_recipient_create_label_tweak, silentpayments_sender_create_outputs, SilentpaymentsRecipient};
+use secp256k1::{Keypair, PublicKey, Secp256k1, SecretKey, XOnlyPublicKey};
+use secp256k1::silentpayments::{silentpayments_recipient_public_data_create, silentpayments_recipient_create_label_tweak, silentpayments_sender_create_outputs, SilentpaymentsRecipient};
 
 struct LabelCacheEntry {
     label: [u8; 33],
@@ -100,6 +100,8 @@ fn main() {
 
     let mut recipients = Vec::<SilentpaymentsRecipient>::new();
 
+    let mut tx_inputs = Vec::<XOnlyPublicKey>::new();
+
     for i in 0..n_tx_outputs {
         let recipient_index = i;
 
@@ -186,6 +188,8 @@ fn main() {
         let keypair = Keypair::from_seckey_slice(&secp, &seckey).unwrap();
 
         taproot_seckeys.push(keypair);
+
+        tx_inputs.push(keypair.x_only_public_key().0);
     }
 
     let taproot_seckeys = taproot_seckeys.as_slice();
@@ -238,7 +242,7 @@ fn main() {
     let bob_scan_secretkey = SecretKey::from_slice(&bob_scan_seckey).unwrap();
     let m: u32 = 1;
 
-    let label_tweak_result = secp256k1_silentpayments_recipient_create_label_tweak(&secp, &bob_scan_secretkey, m).unwrap();
+    let label_tweak_result = silentpayments_recipient_create_label_tweak(&secp, &bob_scan_secretkey, m).unwrap();
 
     println!("{}:", "Bob created the following label tweak:");
     print!("\t{} : 0x", "label_tweak");
@@ -252,5 +256,20 @@ fn main() {
         print!("{:02x}", byte);
     }
     println!();
+
+    let public_data = silentpayments_recipient_public_data_create(
+        &secp,
+        &smallest_outpoint,
+        Some(&tx_inputs),
+        None
+    ).unwrap();
+
+    println!("{}:", "Bob created the following public data:");
+    print!("\t{} : 0x", "public_data");
+    for byte in public_data.to_array().iter().cloned() {
+        print!("{:02x}", byte);
+    }
+    println!();
+    
 
 }

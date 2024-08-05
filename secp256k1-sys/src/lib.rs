@@ -875,6 +875,17 @@ extern "C" {
         recipient_scan_key: *const c_uchar,
         m: c_uint,
     ) -> c_int;
+
+    #[cfg_attr(not(rust_secp_no_symbol_renaming), link_name = "rustsecp256k1_v0_10_0_silentpayments_recipient_public_data_create")]
+    pub fn secp256k1_silentpayments_recipient_public_data_create(
+        cx: *const Context,
+        public_data: *mut SilentpaymentsPublicData,
+        outpoint_smallest36: *const c_uchar,
+        xonly_pubkeys: *const *const XOnlyPublicKey,
+        n_xonly_pubkeys: size_t,
+        plain_pubkeys: *const *const PublicKey,
+        n_plain_pubkeys: size_t,
+    ) -> c_int;
 }
 
 /// A reimplementation of the C function `secp256k1_context_create` in rust.
@@ -1177,16 +1188,6 @@ impl PartialEq for SilentpaymentsFoundOutput {
 #[cfg(not(secp256k1_fuzz))]
 impl Eq for SilentpaymentsFoundOutput {}
 
-/// Opaque data structure that holds silent payments public input data.
-///
-/// This structure does not contain secret data. Guaranteed to be 98 bytes in
-/// size. It can be safely copied/moved. Created with
-/// `secp256k1_silentpayments_public_data_create`. Can be serialized as a
-/// compressed public key using
-/// `secp256k1_silentpayments_public_data_serialize`. The serialization is
-/// intended for sending the public input data to light clients. Light clients
-/// can use this serialization with
-/// `secp256k1_silentpayments_public_data_parse`.
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SilentpaymentsPublicData([u8; 98]);

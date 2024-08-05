@@ -7,10 +7,10 @@ use std;
 
 use core;
 
-use secp256k1_sys::secp256k1_silentpayments_sender_create_outputs;
+use secp256k1_sys::{secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_sender_create_outputs};
 
 use crate::ffi::{self, CPtr};
-use crate::{Keypair, PublicKey, SecretKey, XOnlyPublicKey};
+use crate::{constants, Keypair, PublicKey, SecretKey, XOnlyPublicKey};
 use crate::Secp256k1;
 use crate::Verification;
 
@@ -168,7 +168,7 @@ pub struct LabelTweakResult {
 }
 
 /// lorem ipsum
-pub fn secp256k1_silentpayments_recipient_create_label_tweak<C: Verification>(
+pub fn silentpayments_recipient_create_label_tweak<C: Verification>(
     secp: &Secp256k1<C>,
     recipient_scan_key: &SecretKey,
     m: u32,
@@ -198,3 +198,92 @@ pub fn secp256k1_silentpayments_recipient_create_label_tweak<C: Verification>(
         }
     }
 }
+
+/// Struct to store public data
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SilentpaymentsPublicData(ffi::SilentpaymentsPublicData);
+
+impl SilentpaymentsPublicData {
+    /// Create a new `ElligatorSwift` object from a 64-byte array.
+    pub fn new() -> SilentpaymentsPublicData {
+        let empty_data = [0u8; constants::SILENT_PAYMENTS_PUBLIC_DATA_SIZE];
+        SilentpaymentsPublicData(ffi::SilentpaymentsPublicData::from_array(empty_data))
+    }
+
+    /// Creates an `ElligatorSwift` object from a 64-byte array.
+    pub fn from_array(data: [u8; 98]) -> SilentpaymentsPublicData {
+        SilentpaymentsPublicData(ffi::SilentpaymentsPublicData::from_array(data))
+    }
+
+    /// Returns the 64-byte array representation of this `ElligatorSwift` object.
+    pub fn to_array(&self) -> [u8; 98] { self.0.to_array() }
+}
+
+/// lorem ipsum
+pub fn silentpayments_recipient_public_data_create<C: Verification>(
+    secp: &Secp256k1<C>,
+    smallest_outpoint: &[u8; 36],
+    xonly_pubkeys: Option<&[XOnlyPublicKey]>,
+    plain_pubkeys: Option<&[PublicKey]>,
+) -> Result<SilentpaymentsPublicData, &'static str> {
+
+    let cx = secp.ctx().as_ptr();
+
+    // Create vectors to hold the data, ensuring it stays in scope
+    let mut ffi_xonly_pubkeys = Vec::new();
+    let mut ffi_xonly_pubkeys_ptrs = Vec::new();
+    let mut ffi_plain_pubkeys = Vec::new();
+    let mut ffi_plain_pubkeys_ptrs = Vec::new();
+
+    // Populate xonly pubkeys if provided
+    if let Some(xonly_pubkeys) = xonly_pubkeys {
+        ffi_xonly_pubkeys = xonly_pubkeys
+            .iter()
+            .map(|xonly_pubkey| unsafe { (*xonly_pubkey.as_c_ptr()).clone() })
+            .collect();
+        ffi_xonly_pubkeys_ptrs = ffi_xonly_pubkeys
+            .iter()
+            .map(|keypair| keypair as *const ffi::XOnlyPublicKey)
+            .collect();
+    }
+
+    // Populate taproot seckeys if provided
+    if let Some(plain_pubkeys) = plain_pubkeys {
+        ffi_plain_pubkeys = plain_pubkeys
+            .iter()
+            .map(|plain_pubkey| unsafe { (*plain_pubkey.as_c_ptr()).clone() })
+            .collect();
+        ffi_plain_pubkeys_ptrs = ffi_plain_pubkeys
+            .iter()
+            .map(|keypair| keypair as *const ffi::PublicKey)
+            .collect();
+    }
+
+    let n_xonly_pubkeys = ffi_xonly_pubkeys.len();
+    let n_plain_pubkeys = ffi_plain_pubkeys.len();
+
+    unsafe {
+        
+        let empty_data = [0u8; constants::SILENT_PAYMENTS_PUBLIC_DATA_SIZE];
+        let mut silentpayments_public_data = ffi::SilentpaymentsPublicData::from_array(empty_data);
+
+        let res = secp256k1_silentpayments_recipient_public_data_create(
+            cx,
+            &mut silentpayments_public_data,
+            smallest_outpoint.as_c_ptr(),
+            if !ffi_xonly_pubkeys_ptrs.is_empty() { ffi_xonly_pubkeys_ptrs.as_ptr() } else { std::ptr::null() },
+            n_xonly_pubkeys,
+            if !ffi_plain_pubkeys_ptrs.is_empty() { ffi_plain_pubkeys_ptrs.as_ptr() } else { std::ptr::null() },
+            n_plain_pubkeys,
+        );
+
+        if res == 1 {
+            // Ok(out_pubkeys.into_iter().map(XOnlyPublicKey::from).collect())
+            let silentpayments_public_data = SilentpaymentsPublicData(silentpayments_public_data);
+            Ok(silentpayments_public_data)
+        } else {
+            Err("Failed to create silent payments public data")
+        }
+    }
+}
+
