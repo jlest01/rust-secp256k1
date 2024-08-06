@@ -364,20 +364,9 @@ fn main() {
         cache
     ).unwrap();
 
-    println!("found_output.len: {}:", found_output.len());
-    for (i, output) in found_output.iter().enumerate() {
-        // print!("\t{} : 0x", address_amounts[i]);
-        // for byte in output.serialize().iter().cloned() {
-        //     print!("{:02x}", byte);
-        // }
-        // println!();
-
-        print!("\t{} : 0x", "Bob found the following outputs:");
-        let pubkey = XOnlyPublicKey(output.0.output.clone());
-        for byte in pubkey.serialize().iter().cloned() {
-            print!("{:02x}", byte);
-        }
-        println!();
+    println!("{} :", "Bob found the following outputs:");
+    for output in found_output.iter() {
+        println!("\t{}", output);
     }
 
 }

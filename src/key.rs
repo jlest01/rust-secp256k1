@@ -1089,7 +1089,7 @@ impl CPtr for Keypair {
 /// [`bincode`]: https://docs.rs/bincode
 /// [`cbor`]: https://docs.rs/cbor
 #[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
-pub struct XOnlyPublicKey(pub ffi::XOnlyPublicKey);
+pub struct XOnlyPublicKey(ffi::XOnlyPublicKey);
 impl_fast_comparisons!(XOnlyPublicKey);
 
 impl fmt::LowerHex for XOnlyPublicKey {

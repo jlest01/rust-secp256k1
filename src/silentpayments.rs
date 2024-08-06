@@ -300,7 +300,7 @@ pub fn silentpayments_recipient_public_data_create<C: Verification>(
 
 /// Struct to store public data
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct SilentpaymentsFoundOutput(pub ffi::SilentpaymentsFoundOutput);
+pub struct SilentpaymentsFoundOutput(ffi::SilentpaymentsFoundOutput);
 
 impl CPtr for SilentpaymentsFoundOutput {
     type Target = ffi::SilentpaymentsFoundOutput;
@@ -310,7 +310,20 @@ impl CPtr for SilentpaymentsFoundOutput {
 
     /// Obtains a mutable pointer suitable for use with FFI functions.
     fn as_mut_c_ptr(&mut self) -> *mut Self::Target { &mut self.0 }
-    
+}
+
+impl fmt::Display for SilentpaymentsFoundOutput {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+
+        let pubkey = XOnlyPublicKey::from(self.0.output.clone());
+
+        let buffer_str = pubkey.serialize()
+            .iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<String>();
+
+        write!(f, "{}", buffer_str)
+    }
 }
 
 impl SilentpaymentsFoundOutput {
