@@ -1,5 +1,6 @@
 //! This module implements high-level Rust bindings for silent payments
 
+use core::ffi::c_void;
 use core::fmt;
 
 #[cfg(feature = "std")]
@@ -7,7 +8,7 @@ use std;
 
 use core;
 
-use secp256k1_sys::{secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_sender_create_outputs};
+use secp256k1_sys::{secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_recipient_scan_outputs, secp256k1_silentpayments_sender_create_outputs, SilentpaymentsLabelLookupFunction};
 
 use crate::ffi::{self, CPtr};
 use crate::{constants, Keypair, PublicKey, SecretKey, XOnlyPublicKey};
@@ -203,6 +204,16 @@ pub fn silentpayments_recipient_create_label_tweak<C: Verification>(
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SilentpaymentsPublicData(ffi::SilentpaymentsPublicData);
 
+impl CPtr for SilentpaymentsPublicData {
+    type Target = ffi::SilentpaymentsPublicData;
+
+    /// Obtains a const pointer suitable for use with FFI functions.
+    fn as_c_ptr(&self) -> *const Self::Target { &self.0 }
+
+    /// Obtains a mutable pointer suitable for use with FFI functions.
+    fn as_mut_c_ptr(&mut self) -> *mut Self::Target { &mut self.0 }
+}
+
 impl SilentpaymentsPublicData {
     /// Create a new `ElligatorSwift` object from a 64-byte array.
     pub fn new() -> SilentpaymentsPublicData {
@@ -287,3 +298,88 @@ pub fn silentpayments_recipient_public_data_create<C: Verification>(
     }
 }
 
+/// Struct to store public data
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct SilentpaymentsFoundOutput(pub ffi::SilentpaymentsFoundOutput);
+
+impl CPtr for SilentpaymentsFoundOutput {
+    type Target = ffi::SilentpaymentsFoundOutput;
+
+    /// Obtains a const pointer suitable for use with FFI functions.
+    fn as_c_ptr(&self) -> *const Self::Target { &self.0 }
+
+    /// Obtains a mutable pointer suitable for use with FFI functions.
+    fn as_mut_c_ptr(&mut self) -> *mut Self::Target { &mut self.0 }
+    
+}
+
+impl SilentpaymentsFoundOutput {
+    /// Create a new `SilentpaymentsFoundOutput` object from a ffi::SilentpaymentsFoundOutput.
+    pub fn empty() -> SilentpaymentsFoundOutput {
+        SilentpaymentsFoundOutput(ffi::SilentpaymentsFoundOutput::empty())
+    }
+}
+
+/// lorem ipsum
+pub fn silentpayments_recipient_scan_outputs<C: Verification, L>(
+    secp: &Secp256k1<C>,
+    tx_outputs: &[XOnlyPublicKey],
+    recipient_scan_key: &SecretKey,
+    public_data: &SilentpaymentsPublicData,
+    recipient_spend_pubkey: &PublicKey,
+    label_lookup: SilentpaymentsLabelLookupFunction,
+    label_context: L,
+) -> Result<Vec<SilentpaymentsFoundOutput>, &'static str>
+{
+
+    let cx = secp.ctx().as_ptr();
+
+    // let z = &label_context as *const L as *const c_void;
+
+    let n_tx_outputs = tx_outputs.len();
+
+    let mut out_found_output = vec![ffi::SilentpaymentsFoundOutput::empty(); n_tx_outputs];
+    let mut out_found_output_ptrs: Vec<_> = out_found_output.iter_mut().map(|k| k as *mut _).collect();
+
+    let ffi_tx_outputs: Vec<ffi::XOnlyPublicKey>  = tx_outputs
+            .iter()
+            .map(|tx_output| unsafe { (*tx_output.as_c_ptr()).clone() })
+            .collect();
+
+    let ffi_tx_outputs_ptrs: Vec<_> = ffi_tx_outputs
+            .iter()
+            .map(|tx_output| tx_output as *const ffi::XOnlyPublicKey)
+            .collect();
+
+    let mut n_found_outputs: usize = 0;
+
+    let res = unsafe {
+
+        secp256k1_silentpayments_recipient_scan_outputs(
+            cx,
+            out_found_output_ptrs.as_mut_c_ptr(),
+            &mut n_found_outputs,
+            ffi_tx_outputs_ptrs.as_c_ptr(),
+            n_tx_outputs,
+            recipient_scan_key.as_c_ptr(),
+            public_data.as_c_ptr(),
+            recipient_spend_pubkey.as_c_ptr(),
+            label_lookup,
+            &label_context as *const L as *const c_void,
+        )
+    };
+
+    if res == 1 {
+
+        let mut result = vec![SilentpaymentsFoundOutput::empty(); n_found_outputs];
+        
+        for i in 0..n_found_outputs {
+            result[i] = SilentpaymentsFoundOutput(out_found_output[i]);
+
+        }
+        
+        Ok(result)
+    } else {
+        Err("Failed to scan outputs")
+    }
+}

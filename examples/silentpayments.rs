@@ -3,16 +3,53 @@ extern crate secp256k1;
 use core::ffi;
 
 use secp256k1::{Keypair, PublicKey, Secp256k1, SecretKey, XOnlyPublicKey};
-use secp256k1::silentpayments::{silentpayments_recipient_public_data_create, silentpayments_recipient_create_label_tweak, silentpayments_sender_create_outputs, SilentpaymentsRecipient};
+use secp256k1::silentpayments::{
+    silentpayments_recipient_public_data_create, 
+    silentpayments_recipient_create_label_tweak, 
+    silentpayments_sender_create_outputs, 
+    SilentpaymentsRecipient, 
+    silentpayments_recipient_scan_outputs
+};
 
+use libc::{c_uchar, c_void, size_t};
+use std::slice;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 struct LabelCacheEntry {
     label: [u8; 33],
     label_tweak: [u8; 32],
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 struct LabelsCache {
-    entries_used: usize,
+    entries_used: size_t,
     entries: [LabelCacheEntry; 5],
+}
+
+#[no_mangle]
+pub extern "C" fn rust_secp256k1_silentpayments_label_lookup(
+    label33: *const c_uchar,
+    cache_ptr: *const c_void,
+) -> *const c_uchar {
+    // Safety checks
+    if label33.is_null() || cache_ptr.is_null() {
+        return std::ptr::null();
+    }
+
+    unsafe {
+        let cache = &*(cache_ptr as *const LabelsCache);
+        let label33_slice = slice::from_raw_parts(label33, 33);
+
+        for i in 0..cache.entries_used {
+            if cache.entries[i].label == *label33_slice {
+                return cache.entries[i].label_tweak.as_ptr();
+            }
+        }
+
+        std::ptr::null()
+    }
 }
 
 fn main() {
@@ -55,6 +92,13 @@ fn main() {
         0x56, 0x65, 0x74, 0xf2, 0xaa, 0x93, 0xad, 0xe0,
         0x51, 0x85, 0x09, 0x03, 0xa6, 0x9c, 0xbd, 0xd1,
         0xd4, 0x7e, 0xae, 0x26, 0x3d, 0x7b, 0xc0, 0x31
+    ];
+
+    let bob_spend_pubkey: [u8; 33] = [
+        0x02, 0xee, 0x97, 0xdf, 0x83, 0xb2, 0x54, 0x6a,
+        0xf5, 0xa7, 0xd0, 0x62, 0x15, 0xd9, 0x8b, 0xcb,
+        0x63, 0x7f, 0xe0, 0x5d, 0xd0, 0xfa, 0x37, 0x3b,
+        0xd8, 0x20, 0xe6, 0x64, 0xd3, 0x72, 0xde, 0x9a, 0x01
     ];
 
     let bob_address: [[u8; 33]; 2] = [
@@ -222,6 +266,8 @@ fn main() {
 
     println!(); */
 
+    let mut tx_outputs: Vec<XOnlyPublicKey> = Vec::new();
+
     let out_pubkeys = silentpayments_sender_create_outputs(
         &secp, 
         recipients,
@@ -237,6 +283,8 @@ fn main() {
             print!("{:02x}", byte);
         }
         println!();
+
+        tx_outputs.push(out_pubkey.clone());
     }
 
     let bob_scan_secretkey = SecretKey::from_slice(&bob_scan_seckey).unwrap();
@@ -270,6 +318,66 @@ fn main() {
         print!("{:02x}", byte);
     }
     println!();
+
+    let mut cache = LabelsCache {
+        entries_used: 0,
+        entries: [LabelCacheEntry {
+            label: [0; 33],
+            label_tweak: [0; 32]
+        }; 5]
+    };
+
+    // set the first entry using the label_tweak_result and update the entries_used
+    cache.entries[0].label = label_tweak_result.pubkey.serialize();
+    cache.entries[0].label_tweak = label_tweak_result.label_tweak;
+    cache.entries_used += 1;
     
+    // check if cache.entries[0].label is equal to label_tweak_result.pubkey.serialize() using the label_lookup function
+    let label_tweak = rust_secp256k1_silentpayments_label_lookup(
+        label_tweak_result.pubkey.serialize().as_ptr(),
+        &cache as *const LabelsCache as *const c_void
+    );
+
+    println!("{}:", "Bob looked up the following label tweak:");
+    print!("\t{} : 0x", "label_tweak");
+    if !label_tweak.is_null() {
+        let label_tweak = unsafe { slice::from_raw_parts(label_tweak, 32) };
+        for byte in label_tweak.iter().cloned() {
+            print!("{:02x}", byte);
+        }
+        println!();
+    } else {
+        println!("\t{:?} : {:?}", "label_tweak", "not found");
+    }
+
+    let tx_outputs_slice = tx_outputs.as_slice();
+
+    let bob_spend_publickey = PublicKey::from_slice(&bob_spend_pubkey).unwrap();
+
+    let found_output = silentpayments_recipient_scan_outputs(
+        &secp,
+        tx_outputs_slice,
+        &bob_scan_secretkey,
+        &public_data,
+        &bob_spend_publickey,
+        rust_secp256k1_silentpayments_label_lookup,
+        cache
+    ).unwrap();
+
+    println!("found_output.len: {}:", found_output.len());
+    for (i, output) in found_output.iter().enumerate() {
+        // print!("\t{} : 0x", address_amounts[i]);
+        // for byte in output.serialize().iter().cloned() {
+        //     print!("{:02x}", byte);
+        // }
+        // println!();
+
+        print!("\t{} : 0x", "Bob found the following outputs:");
+        let pubkey = XOnlyPublicKey(output.0.output.clone());
+        for byte in pubkey.serialize().iter().cloned() {
+            print!("{:02x}", byte);
+        }
+        println!();
+    }
 
 }

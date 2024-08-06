@@ -170,6 +170,9 @@ pub mod schnorr;
 #[cfg(feature = "serde")]
 mod serde_util;
 
+// expose ffi::SilentpaymentsLabelLookupFunction as SilentpaymentsLabelLookupFunction
+pub use ffi::SilentpaymentsLabelLookupFunction;
+
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 use core::{fmt, mem, str};

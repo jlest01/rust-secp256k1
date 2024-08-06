@@ -886,6 +886,26 @@ extern "C" {
         plain_pubkeys: *const *const PublicKey,
         n_plain_pubkeys: size_t,
     ) -> c_int;
+
+    /* #[cfg_attr(not(rust_secp_no_symbol_renaming), link_name = "rustsecp256k1_v0_10_0_silentpayments_label_lookup")]
+    pub fn secp256k1_silentpayments_label_lookup(
+        label33: *const c_uchar,
+        label_context: *const c_void,
+    ) -> *const c_uchar; */
+
+    #[cfg_attr(not(rust_secp_no_symbol_renaming), link_name = "rustsecp256k1_v0_10_0_silentpayments_recipient_scan_outputs")]
+    pub fn secp256k1_silentpayments_recipient_scan_outputs(
+        ctx: *const Context,
+        found_outputs: *mut *mut SilentpaymentsFoundOutput,
+        n_found_outputs: *mut size_t,
+        tx_outputs: *const *const XOnlyPublicKey,
+        n_tx_outputs: size_t,
+        recipient_scan_key: *const c_uchar,
+        public_data: *const SilentpaymentsPublicData,
+        recipient_spend_pubkey: *const PublicKey,
+        label_lookup: SilentpaymentsLabelLookupFunction,
+        label_context: *const c_void,
+    ) -> c_int;
 }
 
 /// A reimplementation of the C function `secp256k1_context_create` in rust.
@@ -1161,14 +1181,26 @@ impl Eq for SilentpaymentsRecipient {}
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct SilentpaymentsFoundOutput {
+    pub output: XOnlyPublicKey,
     tweak: [u8; 32],
     found_with_label: bool,
     label: PublicKey,
 }
 
 impl SilentpaymentsFoundOutput {
-    pub fn new(tweak: &[u8; 32],  found_with_label: bool, label: &PublicKey) -> Self {
+
+    pub fn empty() -> Self {
         Self {
+            output: unsafe { XOnlyPublicKey::new() },
+            tweak: [0; 32],
+            found_with_label: false,
+            label: unsafe { PublicKey::new() },
+        }
+    }
+
+    pub fn new(output: &XOnlyPublicKey, tweak: &[u8; 32],  found_with_label: bool, label: &PublicKey) -> Self {
+        Self {
+            output: output.clone(),
             tweak: tweak.clone(),
             found_with_label,
             label: label.clone(),
@@ -1188,6 +1220,17 @@ impl PartialEq for SilentpaymentsFoundOutput {
 #[cfg(not(secp256k1_fuzz))]
 impl Eq for SilentpaymentsFoundOutput {}
 
+impl core::fmt::Debug for SilentpaymentsFoundOutput {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SilentpaymentsFoundOutput")
+            .field("output", &self.output)
+            .field("tweak", &self.tweak)
+            .field("found_with_label", &self.found_with_label)
+            .field("label", &self.label)
+            .finish()
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SilentpaymentsPublicData([u8; 98]);
@@ -1203,6 +1246,14 @@ impl SilentpaymentsPublicData {
 
 impl_array_newtype!(SilentpaymentsPublicData, u8, 98);
 impl_raw_debug!(SilentpaymentsPublicData);
+
+/* pub type Secp256k1SilentpaymentsLabelLookup = unsafe extern "C" fn(
+    label33: *const c_uchar,
+    label_context: *const c_void,
+) -> *const c_uchar;
+ */
+
+ pub type SilentpaymentsLabelLookupFunction =  unsafe extern "C" fn(*const c_uchar, *const c_void) -> *const c_uchar;
 
 #[cfg(secp256k1_fuzz)]
 mod fuzz_dummy {
