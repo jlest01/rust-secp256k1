@@ -8,7 +8,7 @@ use std;
 
 use core;
 
-use secp256k1_sys::{secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_recipient_public_data_parse, secp256k1_silentpayments_recipient_public_data_serialize, secp256k1_silentpayments_recipient_scan_outputs, secp256k1_silentpayments_sender_create_outputs, SilentpaymentsLabelLookupFunction};
+use secp256k1_sys::{secp256k1_silentpayments_recipient_create_shared_secret, secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_recipient_public_data_parse, secp256k1_silentpayments_recipient_public_data_serialize, secp256k1_silentpayments_recipient_scan_outputs, secp256k1_silentpayments_sender_create_outputs, SilentpaymentsLabelLookupFunction};
 
 use crate::ffi::{self, CPtr};
 use crate::{constants, Keypair, PublicKey, SecretKey, XOnlyPublicKey};
@@ -267,6 +267,26 @@ impl SilentpaymentsPublicData {
         if res == 1 {
             let silentpayments_public_data = SilentpaymentsPublicData(silentpayments_public_data);
             Ok(silentpayments_public_data)
+        } else {
+            Err("Failed to parse silent payments public data")
+        }
+    }
+
+    /// Create Silent Payment shared secret
+    pub fn recipient_create_shared_secret<C: Verification>(&self, secp: &Secp256k1<C>, recipient_scan_key: &SecretKey) -> Result<[u8; 33], &'static str> {
+        let mut output33 = [0u8; 33];
+
+        let res = unsafe {
+            secp256k1_silentpayments_recipient_create_shared_secret(
+                secp.ctx().as_ptr(),
+                output33.as_mut_c_ptr(),
+                recipient_scan_key.as_c_ptr(),
+                self.as_c_ptr(),
+            )
+        };
+
+        if res == 1 {
+            Ok(output33)
         } else {
             Err("Failed to parse silent payments public data")
         }

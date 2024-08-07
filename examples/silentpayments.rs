@@ -117,6 +117,13 @@ fn main() {
         ]
     ];
 
+    let carol_scan_key: [u8; 32] = [
+        0x04, 0xb2, 0xa4, 0x11, 0x63, 0x5c, 0x09, 0x77,
+        0x59, 0xaa, 0xcd, 0x0f, 0x00, 0x5a, 0x4c, 0x82,
+        0xc8, 0xc9, 0x28, 0x62, 0xc6, 0xfc, 0x28, 0x4b,
+        0x80, 0xb8, 0xef, 0xeb, 0xc2, 0x0c, 0x3d, 0x17
+    ];
+
     let carol_address: [[u8; 33]; 2] = [
         [
             0x03, 0xbb, 0xc6, 0x3f, 0x12, 0x74, 0x5d, 0x3b,
@@ -378,7 +385,7 @@ fn main() {
     }
     println!();
 
-    let public_data2 = SilentpaymentsPublicData::parse(&secp, &light_client_data33).unwrap();
+    let carol_public_data = SilentpaymentsPublicData::parse(&secp, &light_client_data33).unwrap();
 
     println!("{} :", "public_data");
     print!("{}", "0x");
@@ -387,11 +394,21 @@ fn main() {
     }
     println!();
 
-    println!("{} :", "public_data2");
+    println!("{} :", "carol_public_data");
     print!("{}", "0x");
-    for byte in public_data2.to_array().iter().cloned() {
+    for byte in carol_public_data.to_array().iter().cloned() {
         print!("{:02x}", byte);
     }
     println!();
 
+    let carol_scan_seckey = SecretKey::from_slice(&carol_scan_key).unwrap();
+
+    let shared_secret = carol_public_data.recipient_create_shared_secret(&secp, &carol_scan_seckey).unwrap();
+
+    println!("{} :", "shared_secret");
+    print!("{}", "0x");
+    for byte in shared_secret.iter().cloned() {
+        print!("{:02x}", byte);
+    }
+    println!();
 }

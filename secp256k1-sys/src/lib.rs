@@ -914,6 +914,14 @@ extern "C" {
         public_data: *mut SilentpaymentsPublicData,
         input33: *const c_uchar,
     ) -> c_int;
+
+    #[cfg_attr(not(rust_secp_no_symbol_renaming), link_name = "rustsecp256k1_v0_10_0_silentpayments_recipient_create_shared_secret")]
+    pub fn secp256k1_silentpayments_recipient_create_shared_secret(
+        ctx: *const Context,
+        shared_secret33: *mut c_uchar,
+        recipient_scan_key: *const c_uchar,
+        public_data: *const SilentpaymentsPublicData,
+    ) -> c_int;
 }
 
 /// A reimplementation of the C function `secp256k1_context_create` in rust.
