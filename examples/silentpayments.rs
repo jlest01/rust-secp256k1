@@ -369,4 +369,12 @@ fn main() {
         println!("\t{}", output);
     }
 
+    let light_client_data33 = public_data.serialize(&secp).unwrap();
+    println!("{} :", "light_client_data33");
+    print!("{}", "0x");
+    for byte in light_client_data33.iter().cloned() {
+        print!("{:02x}", byte);
+    }
+    println!();
+
 }

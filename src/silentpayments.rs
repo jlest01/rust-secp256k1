@@ -8,7 +8,7 @@ use std;
 
 use core;
 
-use secp256k1_sys::{secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_recipient_scan_outputs, secp256k1_silentpayments_sender_create_outputs, SilentpaymentsLabelLookupFunction};
+use secp256k1_sys::{secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_recipient_public_data_serialize, secp256k1_silentpayments_recipient_scan_outputs, secp256k1_silentpayments_sender_create_outputs, SilentpaymentsLabelLookupFunction};
 
 use crate::ffi::{self, CPtr};
 use crate::{constants, Keypair, PublicKey, SecretKey, XOnlyPublicKey};
@@ -228,6 +228,28 @@ impl SilentpaymentsPublicData {
 
     /// Returns the 64-byte array representation of this `ElligatorSwift` object.
     pub fn to_array(&self) -> [u8; 98] { self.0.to_array() }
+
+    /// Serialize a silentpayments_public_data object into a 33-byte sequence
+    pub fn serialize<C: Verification>(&self,
+        secp: &Secp256k1<C>) -> Result<[u8; 33], &'static str> {
+        // TODO
+
+        let mut output33 = [0u8; 33];
+
+        let res = unsafe {
+            secp256k1_silentpayments_recipient_public_data_serialize(
+                secp.ctx().as_ptr(),
+                output33.as_mut_c_ptr(),
+                self.as_c_ptr(),
+            )
+        };
+
+        if res == 1 {
+            Ok(output33)
+        } else {
+            Err("Failed to create silent payments public data")
+        }
+    }
 }
 
 /// lorem ipsum

@@ -887,12 +887,6 @@ extern "C" {
         n_plain_pubkeys: size_t,
     ) -> c_int;
 
-    /* #[cfg_attr(not(rust_secp_no_symbol_renaming), link_name = "rustsecp256k1_v0_10_0_silentpayments_label_lookup")]
-    pub fn secp256k1_silentpayments_label_lookup(
-        label33: *const c_uchar,
-        label_context: *const c_void,
-    ) -> *const c_uchar; */
-
     #[cfg_attr(not(rust_secp_no_symbol_renaming), link_name = "rustsecp256k1_v0_10_0_silentpayments_recipient_scan_outputs")]
     pub fn secp256k1_silentpayments_recipient_scan_outputs(
         ctx: *const Context,
@@ -905,6 +899,13 @@ extern "C" {
         recipient_spend_pubkey: *const PublicKey,
         label_lookup: SilentpaymentsLabelLookupFunction,
         label_context: *const c_void,
+    ) -> c_int;
+
+    #[cfg_attr(not(rust_secp_no_symbol_renaming), link_name = "rustsecp256k1_v0_10_0_silentpayments_recipient_public_data_serialize")]
+    pub fn secp256k1_silentpayments_recipient_public_data_serialize(
+        ctx: *const Context,
+        output33: *mut c_uchar,
+        public_data: *const SilentpaymentsPublicData
     ) -> c_int;
 }
 
