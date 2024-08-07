@@ -857,7 +857,7 @@ extern "C" {
     pub fn secp256k1_silentpayments_sender_create_outputs(
         cx: *const Context,
         generated_outputs: *mut *mut XOnlyPublicKey,
-        recipients: *const *const SilentpaymentsRecipient,
+        recipients: *mut *const SilentpaymentsRecipient,
         n_recipients: size_t,
         outpoint_smallest36: *const c_uchar,
         taproot_seckeys: *const *const Keypair,
@@ -905,7 +905,14 @@ extern "C" {
     pub fn secp256k1_silentpayments_recipient_public_data_serialize(
         ctx: *const Context,
         output33: *mut c_uchar,
-        public_data: *const SilentpaymentsPublicData
+        public_data: *const SilentpaymentsPublicData,
+    ) -> c_int;
+
+    #[cfg_attr(not(rust_secp_no_symbol_renaming), link_name = "rustsecp256k1_v0_10_0_silentpayments_recipient_public_data_parse")]
+    pub fn secp256k1_silentpayments_recipient_public_data_parse(
+        ctx: *const Context,
+        public_data: *mut SilentpaymentsPublicData,
+        input33: *const c_uchar,
     ) -> c_int;
 }
 

@@ -8,7 +8,8 @@ use secp256k1::silentpayments::{
     silentpayments_recipient_create_label_tweak, 
     silentpayments_sender_create_outputs, 
     SilentpaymentsRecipient, 
-    silentpayments_recipient_scan_outputs
+    silentpayments_recipient_scan_outputs,
+    SilentpaymentsPublicData
 };
 
 use libc::{c_uchar, c_void, size_t};
@@ -373,6 +374,22 @@ fn main() {
     println!("{} :", "light_client_data33");
     print!("{}", "0x");
     for byte in light_client_data33.iter().cloned() {
+        print!("{:02x}", byte);
+    }
+    println!();
+
+    let public_data2 = SilentpaymentsPublicData::parse(&secp, &light_client_data33).unwrap();
+
+    println!("{} :", "public_data");
+    print!("{}", "0x");
+    for byte in public_data.to_array().iter().cloned() {
+        print!("{:02x}", byte);
+    }
+    println!();
+
+    println!("{} :", "public_data2");
+    print!("{}", "0x");
+    for byte in public_data2.to_array().iter().cloned() {
         print!("{:02x}", byte);
     }
     println!();

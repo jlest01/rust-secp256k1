@@ -8,7 +8,7 @@ use std;
 
 use core;
 
-use secp256k1_sys::{secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_recipient_public_data_serialize, secp256k1_silentpayments_recipient_scan_outputs, secp256k1_silentpayments_sender_create_outputs, SilentpaymentsLabelLookupFunction};
+use secp256k1_sys::{secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_recipient_public_data_parse, secp256k1_silentpayments_recipient_public_data_serialize, secp256k1_silentpayments_recipient_scan_outputs, secp256k1_silentpayments_sender_create_outputs, SilentpaymentsLabelLookupFunction};
 
 use crate::ffi::{self, CPtr};
 use crate::{constants, Keypair, PublicKey, SecretKey, XOnlyPublicKey};
@@ -98,7 +98,7 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
     let n_tx_outputs = recipients.len();
 
     let ffi_recipients: Vec<ffi::SilentpaymentsRecipient> = recipients.iter().map(|r| r.0.clone()).collect();
-    let ffi_recipients_ptrs: Vec<_> = ffi_recipients.iter().map(|r| r as *const _).collect();
+    let mut ffi_recipients_ptrs: Vec<_> = ffi_recipients.iter().map(|r| r as *const _).collect();
 
     // Create vectors to hold the data, ensuring it stays in scope
     let mut ffi_taproot_seckeys = Vec::new();
@@ -140,7 +140,7 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
         let res = secp256k1_silentpayments_sender_create_outputs(
             cx,
             out_pubkeys_ptrs.as_mut_ptr(),
-            ffi_recipients_ptrs.as_ptr(),
+            ffi_recipients_ptrs.as_mut_ptr(),
             n_tx_outputs,
             smallest_outpoint.as_ptr(),
             if !ffi_taproot_seckeys_ptrs.is_empty() { ffi_taproot_seckeys_ptrs.as_ptr() } else { std::ptr::null() },
@@ -232,7 +232,6 @@ impl SilentpaymentsPublicData {
     /// Serialize a silentpayments_public_data object into a 33-byte sequence
     pub fn serialize<C: Verification>(&self,
         secp: &Secp256k1<C>) -> Result<[u8; 33], &'static str> {
-        // TODO
 
         let mut output33 = [0u8; 33];
 
@@ -247,7 +246,29 @@ impl SilentpaymentsPublicData {
         if res == 1 {
             Ok(output33)
         } else {
-            Err("Failed to create silent payments public data")
+            Err("Failed to serialize silent payments public data")
+        }
+    }
+
+    /// Parse a 33-byte sequence into a silent_payments_public_data object.
+    pub fn parse<C: Verification>(secp: &Secp256k1<C>, input33: &[u8; 33]) -> Result<Self, &'static str> {
+
+        let empty_data = [0u8; constants::SILENT_PAYMENTS_PUBLIC_DATA_SIZE];
+        let mut silentpayments_public_data = ffi::SilentpaymentsPublicData::from_array(empty_data);
+
+        let res = unsafe {
+            secp256k1_silentpayments_recipient_public_data_parse(
+                secp.ctx().as_ptr(),
+                &mut silentpayments_public_data,
+                input33.as_c_ptr(),
+            )
+        };
+
+        if res == 1 {
+            let silentpayments_public_data = SilentpaymentsPublicData(silentpayments_public_data);
+            Ok(silentpayments_public_data)
+        } else {
+            Err("Failed to parse silent payments public data")
         }
     }
 }
