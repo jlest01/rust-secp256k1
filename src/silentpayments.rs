@@ -8,7 +8,7 @@ use std;
 
 use core;
 
-use secp256k1_sys::{secp256k1_silentpayments_recipient_create_shared_secret, secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_recipient_public_data_parse, secp256k1_silentpayments_recipient_public_data_serialize, secp256k1_silentpayments_recipient_scan_outputs, secp256k1_silentpayments_sender_create_outputs, SilentpaymentsLabelLookupFunction};
+use secp256k1_sys::{secp256k1_silentpayments_recipient_create_output_pubkey, secp256k1_silentpayments_recipient_create_shared_secret, secp256k1_silentpayments_recipient_public_data_create, secp256k1_silentpayments_recipient_public_data_parse, secp256k1_silentpayments_recipient_public_data_serialize, secp256k1_silentpayments_recipient_scan_outputs, secp256k1_silentpayments_sender_create_outputs, SilentpaymentsLabelLookupFunction};
 
 use crate::ffi::{self, CPtr};
 use crate::{constants, Keypair, PublicKey, SecretKey, XOnlyPublicKey};
@@ -457,5 +457,35 @@ pub fn silentpayments_recipient_scan_outputs<C: Verification, L>(
         Ok(result)
     } else {
         Err("Failed to scan outputs")
+    }
+}
+
+/// Create Silent Payment output public key.
+pub fn silentpayments_recipient_create_output_pubkey(
+    secp: &Secp256k1<crate::All>,
+    shared_secret33: &[u8; 33],
+    recipient_spend_pubkey: &PublicKey,
+    k: u32,
+) -> Result<XOnlyPublicKey, &'static str> {
+
+    let cx = secp.ctx().as_ptr();
+    unsafe {
+
+        let mut pubkey = ffi::XOnlyPublicKey::new();
+
+        let res = secp256k1_silentpayments_recipient_create_output_pubkey(
+            cx,
+            &mut pubkey,
+            shared_secret33.as_c_ptr(),
+            recipient_spend_pubkey.as_c_ptr(),
+            k,
+        );
+
+        if res == 1 {
+            let pubkey = XOnlyPublicKey::from(pubkey);
+            Ok(pubkey)
+        } else {
+            Err("Failed to create output pubkey")
+        }
     }
 }

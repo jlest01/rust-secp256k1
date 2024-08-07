@@ -9,7 +9,8 @@ use secp256k1::silentpayments::{
     silentpayments_sender_create_outputs, 
     SilentpaymentsRecipient, 
     silentpayments_recipient_scan_outputs,
-    SilentpaymentsPublicData
+    SilentpaymentsPublicData,
+    silentpayments_recipient_create_output_pubkey
 };
 
 use libc::{c_uchar, c_void, size_t};
@@ -411,4 +412,27 @@ fn main() {
         print!("{:02x}", byte);
     }
     println!();
+
+    let found = false;
+    let mut k: u32 = 0;
+
+    let carol_spend_pubkey = PublicKey::from_slice(&carol_address[1]).unwrap();
+
+    println!();
+
+    for i in 0..3 {
+        
+        k = i;
+
+        let potential_output = 
+            silentpayments_recipient_create_output_pubkey(&secp, &shared_secret, &carol_spend_pubkey, k).unwrap();
+        
+        println!("{} {} :", "potential_output", k);
+        print!("{}", "0x");
+        for byte in potential_output.serialize().iter().cloned() {
+            print!("{:02x}", byte);
+        }
+        println!();
+    
+    }
 }
