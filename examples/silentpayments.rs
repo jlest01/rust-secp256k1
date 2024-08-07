@@ -413,26 +413,40 @@ fn main() {
     }
     println!();
 
-    let found = false;
+    let mut found: bool = false;
     let mut k: u32 = 0;
+    let mut ser_found_outputs: Vec<XOnlyPublicKey> = Vec::new();
 
     let carol_spend_pubkey = PublicKey::from_slice(&carol_address[1]).unwrap();
 
     println!();
 
-    for i in 0..3 {
-        
-        k = i;
+    loop {
 
         let potential_output = 
             silentpayments_recipient_create_output_pubkey(&secp, &shared_secret, &carol_spend_pubkey, k).unwrap();
-        
-        println!("{} {} :", "potential_output", k);
-        print!("{}", "0x");
-        for byte in potential_output.serialize().iter().cloned() {
+
+        found = false;
+        for i in 0..n_tx_outputs {
+            if tx_outputs[i] == potential_output {
+                ser_found_outputs.push(potential_output);
+                found = true;
+                k += 1;
+                break;
+            }
+        }
+
+        if !found {
+            break;;
+        }
+    }
+
+    println!("{}:", "Carol found the following outputs");
+    for (i, output) in ser_found_outputs.iter().enumerate() {
+        print!("\t{}", "0x");
+        for byte in output.serialize().iter().cloned() {
             print!("{:02x}", byte);
         }
         println!();
-    
     }
 }
