@@ -489,3 +489,31 @@ pub fn silentpayments_recipient_create_output_pubkey(
         }
     }
 }
+
+/// Create Silent Payment labelled spend public key.
+pub fn silentpayments_recipient_create_labelled_spend_pubkey(
+    secp: &Secp256k1<crate::All>,
+    recipient_spend_pubkey: &PublicKey,
+    label: &PublicKey,
+) -> Result<PublicKey, &'static str> {
+
+    let cx = secp.ctx().as_ptr();
+    unsafe {
+
+        let mut pubkey = ffi::PublicKey::new();
+
+        let res = ffi::secp256k1_silentpayments_recipient_create_labelled_spend_pubkey(
+            cx,
+            &mut pubkey,
+            recipient_spend_pubkey.as_c_ptr(),
+            label.as_c_ptr(),
+        );
+
+        if res == 1 {
+            let pubkey = PublicKey::from(pubkey);
+            Ok(pubkey)
+        } else {
+            Err("Failed to create labelled spend pubkey")
+        }
+    }
+}

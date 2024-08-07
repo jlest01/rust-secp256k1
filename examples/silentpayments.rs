@@ -10,7 +10,8 @@ use secp256k1::silentpayments::{
     SilentpaymentsRecipient, 
     silentpayments_recipient_scan_outputs,
     SilentpaymentsPublicData,
-    silentpayments_recipient_create_output_pubkey
+    silentpayments_recipient_create_output_pubkey,
+    silentpayments_recipient_create_labelled_spend_pubkey
 };
 
 use libc::{c_uchar, c_void, size_t};
@@ -313,6 +314,26 @@ fn main() {
         print!("{:02x}", byte);
     }
     println!();
+
+
+    // ---
+
+    let bob_spend_publickey = PublicKey::from_slice(&bob_spend_pubkey).unwrap();
+
+    let labelled_spend_pubkey = silentpayments_recipient_create_labelled_spend_pubkey(
+        &secp,
+        &bob_spend_publickey,
+        &label_tweak_result.pubkey
+    ).unwrap();
+
+    println!("{}:", "Bob created the following labelled spend pubkey:");
+    print!("\t{} : 0x", "labelled_spend_pubkey");
+    for byte in labelled_spend_pubkey.serialize().iter().cloned() {
+        print!("{:02x}", byte);
+    }
+    println!();
+
+    // ---
 
     let public_data = silentpayments_recipient_public_data_create(
         &secp,
