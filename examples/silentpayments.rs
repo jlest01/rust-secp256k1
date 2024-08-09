@@ -2,7 +2,6 @@ extern crate secp256k1;
 
 use secp256k1::{Keypair, PublicKey, Secp256k1, SecretKey, XOnlyPublicKey};
 use secp256k1::silentpayments::{
-    silentpayments_recipient_public_data_create, 
     silentpayments_recipient_create_label_tweak, 
     silentpayments_sender_create_outputs, 
     SilentpaymentsRecipient, 
@@ -210,7 +209,7 @@ fn main() {
         &label_tweak_result.pubkey
     ).unwrap();
 
-    let public_data = silentpayments_recipient_public_data_create(
+    let public_data: SilentpaymentsPublicData = SilentpaymentsPublicData::create(
         &secp,
         &smallest_outpoint,
         Some(&tx_inputs),

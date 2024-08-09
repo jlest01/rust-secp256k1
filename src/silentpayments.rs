@@ -29,6 +29,7 @@ fn copy_to_ffi_pubkey(pubkey: &PublicKey) -> ffi::PublicKey {
 
 
 /// Struct to store recipient data
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct SilentpaymentsRecipient(ffi::SilentpaymentsRecipient);
 
@@ -43,23 +44,6 @@ impl SilentpaymentsRecipient {
             index
         ))
     }
-
-    /// Get a const pointer to the inner SilentpaymentsRecipient
-    pub fn as_ptr(&self) -> *const ffi::SilentpaymentsRecipient {
-        &self.0
-    }
-
-    /// Get a mut pointer to the inner SilentpaymentsRecipient
-    pub fn as_mut_ptr(&mut self) -> *mut ffi::SilentpaymentsRecipient {
-        &mut self.0
-    }
-}
-
-impl CPtr for SilentpaymentsRecipient {
-    type Target = ffi::SilentpaymentsRecipient;
-    fn as_c_ptr(&self) -> *const Self::Target { &self.0 }
-
-    fn as_mut_c_ptr(&mut self) -> *mut Self::Target { &mut self.0 }
 }
 
 /// Sender Output creation errors
@@ -91,8 +75,7 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
     let cx = secp.ctx().as_ptr();
     let n_tx_outputs = recipients.len();
 
-    let ffi_recipients: Vec<ffi::SilentpaymentsRecipient> = recipients.iter().map(|r| r.0.clone()).collect();
-    let mut ffi_recipients_ptrs: Vec<_> = ffi_recipients.iter().map(|r| r as *const _).collect();
+    let mut ffi_recipients_ptrs: Vec<_> = recipients.iter().map(|r| &r.0 as *const _).collect();
 
     // Create vectors to hold the data, ensuring it stays in scope
     let mut ffi_taproot_seckeys = Vec::new();
@@ -162,12 +145,30 @@ pub struct LabelTweakResult {
     pub label_tweak: [u8; 32],
 }
 
+/// Label tweak errors
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
+pub enum LabelTweakError {
+    /// Unexpected failures
+    Failure,
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for LabelTweakError {}
+
+impl fmt::Display for LabelTweakError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            LabelTweakError::Failure => write!(f, "Failed to create label tweak"),
+        }
+    }
+}
+
 /// Create Silent Payment label tweak and label.
 pub fn silentpayments_recipient_create_label_tweak<C: Verification>(
     secp: &Secp256k1<C>,
     recipient_scan_key: &SecretKey,
     m: u32,
-) -> Result<LabelTweakResult, &'static str> {
+) -> Result<LabelTweakResult, LabelTweakError> {
 
     let cx = secp.ctx().as_ptr();
     unsafe {
@@ -189,7 +190,7 @@ pub fn silentpayments_recipient_create_label_tweak<C: Verification>(
 
             return Ok(LabelTweakResult { pubkey, label_tweak });
         } else {
-            return Err("Failed to create label tweak");
+            return Err(LabelTweakError::Failure);
         }
     }
 }
@@ -208,6 +209,33 @@ impl CPtr for SilentpaymentsPublicData {
     fn as_mut_c_ptr(&mut self) -> *mut Self::Target { &mut self.0 }
 }
 
+/// Label tweak errors
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
+pub enum SilentpaymentsPublicDataError {
+    /// Failed to create the public data
+    CreationFailure,
+    /// Serialization Failure
+    SerializationFailure,
+    /// Parse Failure
+    ParseFailure,
+    /// Failed to create the shared secret
+    SharedSecretFailure
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for SilentpaymentsPublicDataError {}
+
+impl fmt::Display for SilentpaymentsPublicDataError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            SilentpaymentsPublicDataError::SerializationFailure => write!(f, "Failed to serialize silent payments public data"),
+            SilentpaymentsPublicDataError::ParseFailure => write!(f, "Failed to parse silent payments public data"),
+            SilentpaymentsPublicDataError::SharedSecretFailure => write!(f, "Failed to create shared secret"),
+            SilentpaymentsPublicDataError::CreationFailure => write!(f, "Failed to create silent payments public data"),
+        }
+    }
+}
+
 impl SilentpaymentsPublicData {
     /// Create a new `SilentpaymentsPublicData` object.
     pub fn new() -> SilentpaymentsPublicData {
@@ -223,9 +251,76 @@ impl SilentpaymentsPublicData {
     /// Returns the 64-byte array representation of this `SilentpaymentsPublicData` object.
     pub fn to_array(&self) -> [u8; 98] { self.0.to_array() }
 
+    /// Compute Silent Payment public data from input public keys and transaction inputs
+    pub fn create<C: Verification>(
+        secp: &Secp256k1<C>,
+        smallest_outpoint: &[u8; 36],
+        xonly_pubkeys: Option<&[XOnlyPublicKey]>,
+        plain_pubkeys: Option<&[PublicKey]>,
+    ) -> Result<Self, SilentpaymentsPublicDataError> {
+
+        let cx = secp.ctx().as_ptr();
+
+        // Create vectors to hold the data, ensuring it stays in scope
+        let mut ffi_xonly_pubkeys = Vec::new();
+        let mut ffi_xonly_pubkeys_ptrs = Vec::new();
+        let mut ffi_plain_pubkeys = Vec::new();
+        let mut ffi_plain_pubkeys_ptrs = Vec::new();
+
+        // Populate xonly pubkeys if provided
+        if let Some(xonly_pubkeys) = xonly_pubkeys {
+            ffi_xonly_pubkeys = xonly_pubkeys
+                .iter()
+                .map(|xonly_pubkey| unsafe { (*xonly_pubkey.as_c_ptr()).clone() })
+                .collect();
+            ffi_xonly_pubkeys_ptrs = ffi_xonly_pubkeys
+                .iter()
+                .map(|keypair| keypair as *const ffi::XOnlyPublicKey)
+                .collect();
+        }
+
+        // Populate taproot seckeys if provided
+        if let Some(plain_pubkeys) = plain_pubkeys {
+            ffi_plain_pubkeys = plain_pubkeys
+                .iter()
+                .map(|plain_pubkey| unsafe { (*plain_pubkey.as_c_ptr()).clone() })
+                .collect();
+            ffi_plain_pubkeys_ptrs = ffi_plain_pubkeys
+                .iter()
+                .map(|keypair| keypair as *const ffi::PublicKey)
+                .collect();
+        }
+
+        let n_xonly_pubkeys = ffi_xonly_pubkeys.len();
+        let n_plain_pubkeys = ffi_plain_pubkeys.len();
+
+        unsafe {
+            
+            let empty_data = [0u8; constants::SILENT_PAYMENTS_PUBLIC_DATA_SIZE];
+            let mut silentpayments_public_data = ffi::SilentpaymentsPublicData::from_array(empty_data);
+
+            let res = secp256k1_silentpayments_recipient_public_data_create(
+                cx,
+                &mut silentpayments_public_data,
+                smallest_outpoint.as_c_ptr(),
+                if !ffi_xonly_pubkeys_ptrs.is_empty() { ffi_xonly_pubkeys_ptrs.as_ptr() } else { std::ptr::null() },
+                n_xonly_pubkeys,
+                if !ffi_plain_pubkeys_ptrs.is_empty() { ffi_plain_pubkeys_ptrs.as_ptr() } else { std::ptr::null() },
+                n_plain_pubkeys,
+            );
+
+            if res == 1 {
+                let silentpayments_public_data = SilentpaymentsPublicData(silentpayments_public_data);
+                Ok(silentpayments_public_data)
+            } else {
+                Err(SilentpaymentsPublicDataError::CreationFailure)
+            }
+        }
+    }
+
     /// Serialize a `silentpayments_public_data object`` into a 33-byte sequence.
     pub fn serialize<C: Verification>(&self,
-        secp: &Secp256k1<C>) -> Result<[u8; 33], &'static str> {
+        secp: &Secp256k1<C>) -> Result<[u8; 33], SilentpaymentsPublicDataError> {
 
         let mut output33 = [0u8; 33];
 
@@ -240,12 +335,12 @@ impl SilentpaymentsPublicData {
         if res == 1 {
             Ok(output33)
         } else {
-            Err("Failed to serialize silent payments public data")
+            Err(SilentpaymentsPublicDataError::SerializationFailure)
         }
     }
 
     /// Parse a 33-byte sequence into a silent_payments_public_data object.
-    pub fn parse<C: Verification>(secp: &Secp256k1<C>, input33: &[u8; 33]) -> Result<Self, &'static str> {
+    pub fn parse<C: Verification>(secp: &Secp256k1<C>, input33: &[u8; 33]) -> Result<Self, SilentpaymentsPublicDataError> {
 
         let empty_data = [0u8; constants::SILENT_PAYMENTS_PUBLIC_DATA_SIZE];
         let mut silentpayments_public_data = ffi::SilentpaymentsPublicData::from_array(empty_data);
@@ -262,12 +357,12 @@ impl SilentpaymentsPublicData {
             let silentpayments_public_data = SilentpaymentsPublicData(silentpayments_public_data);
             Ok(silentpayments_public_data)
         } else {
-            Err("Failed to parse silent payments public data")
+            Err(SilentpaymentsPublicDataError::ParseFailure)
         }
     }
 
     /// Create Silent Payment shared secret.
-    pub fn recipient_create_shared_secret<C: Verification>(&self, secp: &Secp256k1<C>, recipient_scan_key: &SecretKey) -> Result<[u8; 33], &'static str> {
+    pub fn recipient_create_shared_secret<C: Verification>(&self, secp: &Secp256k1<C>, recipient_scan_key: &SecretKey) -> Result<[u8; 33], SilentpaymentsPublicDataError> {
         let mut output33 = [0u8; 33];
 
         let res = unsafe {
@@ -282,74 +377,7 @@ impl SilentpaymentsPublicData {
         if res == 1 {
             Ok(output33)
         } else {
-            Err("Failed to parse silent payments public data")
-        }
-    }
-}
-
-/// Compute Silent Payment public data from input public keys and transaction inputs
-pub fn silentpayments_recipient_public_data_create<C: Verification>(
-    secp: &Secp256k1<C>,
-    smallest_outpoint: &[u8; 36],
-    xonly_pubkeys: Option<&[XOnlyPublicKey]>,
-    plain_pubkeys: Option<&[PublicKey]>,
-) -> Result<SilentpaymentsPublicData, &'static str> {
-
-    let cx = secp.ctx().as_ptr();
-
-    // Create vectors to hold the data, ensuring it stays in scope
-    let mut ffi_xonly_pubkeys = Vec::new();
-    let mut ffi_xonly_pubkeys_ptrs = Vec::new();
-    let mut ffi_plain_pubkeys = Vec::new();
-    let mut ffi_plain_pubkeys_ptrs = Vec::new();
-
-    // Populate xonly pubkeys if provided
-    if let Some(xonly_pubkeys) = xonly_pubkeys {
-        ffi_xonly_pubkeys = xonly_pubkeys
-            .iter()
-            .map(|xonly_pubkey| unsafe { (*xonly_pubkey.as_c_ptr()).clone() })
-            .collect();
-        ffi_xonly_pubkeys_ptrs = ffi_xonly_pubkeys
-            .iter()
-            .map(|keypair| keypair as *const ffi::XOnlyPublicKey)
-            .collect();
-    }
-
-    // Populate taproot seckeys if provided
-    if let Some(plain_pubkeys) = plain_pubkeys {
-        ffi_plain_pubkeys = plain_pubkeys
-            .iter()
-            .map(|plain_pubkey| unsafe { (*plain_pubkey.as_c_ptr()).clone() })
-            .collect();
-        ffi_plain_pubkeys_ptrs = ffi_plain_pubkeys
-            .iter()
-            .map(|keypair| keypair as *const ffi::PublicKey)
-            .collect();
-    }
-
-    let n_xonly_pubkeys = ffi_xonly_pubkeys.len();
-    let n_plain_pubkeys = ffi_plain_pubkeys.len();
-
-    unsafe {
-        
-        let empty_data = [0u8; constants::SILENT_PAYMENTS_PUBLIC_DATA_SIZE];
-        let mut silentpayments_public_data = ffi::SilentpaymentsPublicData::from_array(empty_data);
-
-        let res = secp256k1_silentpayments_recipient_public_data_create(
-            cx,
-            &mut silentpayments_public_data,
-            smallest_outpoint.as_c_ptr(),
-            if !ffi_xonly_pubkeys_ptrs.is_empty() { ffi_xonly_pubkeys_ptrs.as_ptr() } else { std::ptr::null() },
-            n_xonly_pubkeys,
-            if !ffi_plain_pubkeys_ptrs.is_empty() { ffi_plain_pubkeys_ptrs.as_ptr() } else { std::ptr::null() },
-            n_plain_pubkeys,
-        );
-
-        if res == 1 {
-            let silentpayments_public_data = SilentpaymentsPublicData(silentpayments_public_data);
-            Ok(silentpayments_public_data)
-        } else {
-            Err("Failed to create silent payments public data")
+            Err(SilentpaymentsPublicDataError::SharedSecretFailure)
         }
     }
 }
@@ -389,6 +417,24 @@ impl SilentpaymentsFoundOutput {
     }
 }
 
+/// Output scan errors
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
+pub enum OutputScanError {
+    /// Unexpected failures
+    Failure,
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for OutputScanError {}
+
+impl fmt::Display for OutputScanError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            OutputScanError::Failure => write!(f, "Failed to scan outputs"),
+        }
+    }
+}
+
 /// Scan for Silent Payment transaction outputs.
 pub fn silentpayments_recipient_scan_outputs<C: Verification, L>(
     secp: &Secp256k1<C>,
@@ -398,7 +444,7 @@ pub fn silentpayments_recipient_scan_outputs<C: Verification, L>(
     recipient_spend_pubkey: &PublicKey,
     label_lookup: SilentpaymentsLabelLookupFunction,
     label_context: L,
-) -> Result<Vec<SilentpaymentsFoundOutput>, &'static str>
+) -> Result<Vec<SilentpaymentsFoundOutput>, OutputScanError>
 {
 
     let cx = secp.ctx().as_ptr();
@@ -447,7 +493,25 @@ pub fn silentpayments_recipient_scan_outputs<C: Verification, L>(
         
         Ok(result)
     } else {
-        Err("Failed to scan outputs")
+        Err(OutputScanError::Failure)
+    }
+}
+
+/// Output scan errors
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
+pub enum OutputPubkeyError {
+    /// Failed to create output pubkey
+    CreationFailure,
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for OutputPubkeyError {}
+
+impl fmt::Display for OutputPubkeyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            OutputPubkeyError::CreationFailure => write!(f, "Failed to create output pubkey"),
+        }
     }
 }
 
@@ -457,7 +521,7 @@ pub fn silentpayments_recipient_create_output_pubkey(
     shared_secret33: &[u8; 33],
     recipient_spend_pubkey: &PublicKey,
     k: u32,
-) -> Result<XOnlyPublicKey, &'static str> {
+) -> Result<XOnlyPublicKey, OutputPubkeyError> {
 
     let cx = secp.ctx().as_ptr();
     unsafe {
@@ -476,7 +540,25 @@ pub fn silentpayments_recipient_create_output_pubkey(
             let pubkey = XOnlyPublicKey::from(pubkey);
             Ok(pubkey)
         } else {
-            Err("Failed to create output pubkey")
+            Err(OutputPubkeyError::CreationFailure)
+        }
+    }
+}
+
+/// Output scan errors
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
+pub enum LabelledSpendPubkeyError {
+    /// Failed to create output pubkey
+    CreationFailure,
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for LabelledSpendPubkeyError {}
+
+impl fmt::Display for LabelledSpendPubkeyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            LabelledSpendPubkeyError::CreationFailure => write!(f, "Failed to create labelled spend pubkey"),
         }
     }
 }
@@ -486,7 +568,7 @@ pub fn silentpayments_recipient_create_labelled_spend_pubkey(
     secp: &Secp256k1<crate::All>,
     recipient_spend_pubkey: &PublicKey,
     label: &PublicKey,
-) -> Result<PublicKey, &'static str> {
+) -> Result<PublicKey, LabelledSpendPubkeyError> {
 
     let cx = secp.ctx().as_ptr();
     unsafe {
@@ -504,7 +586,7 @@ pub fn silentpayments_recipient_create_labelled_spend_pubkey(
             let pubkey = PublicKey::from(pubkey);
             Ok(pubkey)
         } else {
-            Err("Failed to create labelled spend pubkey")
+            Err(LabelledSpendPubkeyError::CreationFailure)
         }
     }
 }
