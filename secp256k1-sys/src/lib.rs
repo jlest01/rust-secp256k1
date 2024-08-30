@@ -1235,7 +1235,7 @@ pub const MUSIG_SESSION_LEN: usize = 133;
 pub const MUSIG_PART_SIG_LEN: usize = 36;
 
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigKeyAggCache([c_uchar; MUSIG_KEYAGG_LEN]);
 impl_array_newtype!(MusigKeyAggCache, c_uchar, MUSIG_KEYAGG_LEN);
 impl_raw_debug!(MusigKeyAggCache);
@@ -1245,7 +1245,6 @@ impl MusigKeyAggCache {
         MusigKeyAggCache([0; MUSIG_KEYAGG_LEN])
     }
 }
-
 
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1274,7 +1273,7 @@ impl MusigSecNonce {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigPubNonce([c_uchar; MUSIG_PUBNONCE_LEN]);
 impl_array_newtype!(MusigPubNonce, c_uchar, MUSIG_PUBNONCE_LEN);
 impl_raw_debug!(MusigPubNonce);
@@ -1286,7 +1285,7 @@ impl MusigPubNonce {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigAggNonce([c_uchar; MUSIG_AGGNONCE_LEN]);
 impl_array_newtype!(MusigAggNonce, c_uchar, MUSIG_AGGNONCE_LEN);
 impl_raw_debug!(MusigAggNonce);
@@ -1298,7 +1297,7 @@ impl MusigAggNonce {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigSession([c_uchar; MUSIG_SESSION_LEN]);
 impl_array_newtype!(MusigSession, c_uchar, MUSIG_SESSION_LEN);
 impl_raw_debug!(MusigSession);
@@ -1310,7 +1309,7 @@ impl MusigSession {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigPartialSignature([c_uchar; MUSIG_PART_SIG_LEN]);
 impl_array_newtype!(MusigPartialSignature, c_uchar, MUSIG_PART_SIG_LEN);
 impl_raw_debug!(MusigPartialSignature);
