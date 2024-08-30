@@ -92,7 +92,7 @@ impl MusigSessionId {
 }
 
 ///  Cached data related to a key aggregation.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigKeyAggCache(ffi::MusigKeyAggCache, XOnlyPublicKey);
 
 impl CPtr for MusigKeyAggCache {
@@ -255,7 +255,7 @@ pub fn new_musig_nonce_pair<C: Signing>(
 }
 
 /// A Musig partial signature.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigPartialSignature(ffi::MusigPartialSignature);
 
 impl CPtr for MusigPartialSignature {
@@ -331,8 +331,6 @@ impl MusigPartialSignature {
         &mut self.0
     }
 }
-
-
 
 impl MusigKeyAggCache {
     /// Creates a new [`MusigKeyAggCache`] by supplying a list of PublicKeys used in the session.
@@ -707,7 +705,7 @@ impl MusigSecNonce {
 
 
 /// An individual MuSig public nonce. Not to be confused with [`MusigAggNonce`].
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigPubNonce(ffi::MusigPubNonce);
 
 impl CPtr for MusigPubNonce {
@@ -781,7 +779,7 @@ impl MusigPubNonce {
 }
 
 /// Musig aggregated nonce computed by aggregating all individual public nonces
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigAggNonce(ffi::MusigAggNonce);
 
 impl CPtr for MusigAggNonce {
@@ -915,20 +913,8 @@ impl MusigAggNonce {
 }
 
 /// A musig Singing session.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigSession(ffi::MusigSession);
-
-// impl CPtr for MusigSession {
-//     type Target = ffi::MusigSession;
-
-//     fn as_c_ptr(&self) -> *const Self::Target {
-//         self.as_ptr()
-//     }
-
-//     fn as_mut_c_ptr(&mut self) -> *mut Self::Target {
-//         self.as_mut_ptr()
-//     }
-// }
 
 impl MusigSession {
 
