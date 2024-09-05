@@ -3,6 +3,7 @@
 use core::ffi::c_void;
 use core::fmt;
 
+use core::mem::transmute;
 #[cfg(feature = "std")]
 use std;
 
@@ -67,52 +68,48 @@ impl fmt::Display for SenderOutputCreationError {
 /// Create Silent Payment outputs for recipient(s).
 pub fn silentpayments_sender_create_outputs<C: Verification>(
     secp: &Secp256k1<C>,
-    recipients: &[SilentpaymentsRecipient],
+    recipients: &mut [&SilentpaymentsRecipient],
     smallest_outpoint: &[u8; 36],
-    taproot_seckeys: Option<&[Keypair]>,
-    plain_seckeys: Option<&[SecretKey]>,
+    taproot_seckeys: Option<&[&Keypair]>,
+    plain_seckeys: Option<&[&SecretKey]>,
 ) -> Result<Vec<XOnlyPublicKey>, SenderOutputCreationError> {
     let cx = secp.ctx().as_ptr();
     let n_tx_outputs = recipients.len();
 
-    let mut ffi_recipients_ptrs: Vec<_> = recipients.iter().map(|r| &r.0 as *const _).collect();
-
-    // Create vectors to hold the data, ensuring it stays in scope
-    let mut ffi_taproot_seckeys = Vec::new();
-    let mut ffi_taproot_seckeys_ptrs = Vec::new();
-    let mut plain_seckeys_u8_array = Vec::new();
-    let mut plain_seckeys_ptrs = Vec::new();
-
-    // Populate taproot seckeys if provided
-    if let Some(taproot_seckeys) = taproot_seckeys {
-        ffi_taproot_seckeys = taproot_seckeys
-            .iter()
-            .map(|tap_keypair| unsafe { (*tap_keypair.as_c_ptr()).clone() })
-            .collect();
-        ffi_taproot_seckeys_ptrs = ffi_taproot_seckeys
-            .iter()
-            .map(|keypair| keypair as *const ffi::Keypair)
-            .collect();
-    }
-
-    // Populate plain seckeys if provided
-    if let Some(plain_seckeys) = plain_seckeys {
-        plain_seckeys_u8_array = plain_seckeys
-            .iter()
-            .map(|k| k.secret_bytes())
-            .collect();
-        plain_seckeys_ptrs = plain_seckeys_u8_array
-            .iter()
-            .map(|k| k.as_ptr())
-            .collect();
-    }
-
-    let n_taproot_seckeys = ffi_taproot_seckeys.len();
-    let n_plain_seckeys = plain_seckeys_u8_array.len();
-
     let result = unsafe {
         let mut out_pubkeys = vec![ffi::XOnlyPublicKey::new(); n_tx_outputs];
         let mut out_pubkeys_ptrs: Vec<_> = out_pubkeys.iter_mut().map(|k| k as *mut _).collect();
+
+        let ffi_recipients_ptrs: &mut [*const ffi::SilentpaymentsRecipient] =
+                    transmute::<&mut [&SilentpaymentsRecipient], &mut [*const ffi::SilentpaymentsRecipient]>(recipients);
+
+        let fii_taproot_seckeys = if taproot_seckeys.is_some() {
+            let result: &[*const ffi::Keypair] =
+                    transmute::<&[&Keypair], &[*const ffi::Keypair]>(taproot_seckeys.unwrap());
+            result
+        } else {
+            &[]
+        };
+
+        let n_taproot_seckeys = if taproot_seckeys.is_some() {
+            taproot_seckeys.unwrap().len()
+        } else {
+            0
+        };
+
+        let fii_plain_seckeys = if plain_seckeys.is_some() {
+            let result: &[*const u8] =
+                    transmute::<&[&SecretKey], &[*const u8]>(plain_seckeys.unwrap());
+            result
+        } else {
+            &[]
+        };
+
+        let n_plain_seckeys = if plain_seckeys.is_some() {
+            plain_seckeys.unwrap().len()
+        } else {
+            0
+        };
 
         let res = secp256k1_silentpayments_sender_create_outputs(
             cx,
@@ -120,9 +117,9 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
             ffi_recipients_ptrs.as_mut_ptr(),
             n_tx_outputs,
             smallest_outpoint.as_ptr(),
-            if !ffi_taproot_seckeys_ptrs.is_empty() { ffi_taproot_seckeys_ptrs.as_ptr() } else { std::ptr::null() },
+            if taproot_seckeys.is_some() { fii_taproot_seckeys.as_c_ptr() } else { std::ptr::null() },
             n_taproot_seckeys,
-            if !plain_seckeys_ptrs.is_empty() { plain_seckeys_ptrs.as_ptr() } else { std::ptr::null() },
+            if plain_seckeys.is_some() { fii_plain_seckeys.as_ptr() } else { std::ptr::null() },
             n_plain_seckeys,
         );
 
