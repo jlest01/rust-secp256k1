@@ -74,41 +74,35 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
     plain_seckeys: Option<&[&SecretKey]>,
 ) -> Result<Vec<XOnlyPublicKey>, SenderOutputCreationError> {
     let cx = secp.ctx().as_ptr();
-    let n_tx_outputs = recipients.len();
+    let n_tx_outputs = recipients.len();  // N is known at compile-time as a const.
 
-    let result = unsafe {
+    unsafe {
+        // let mut out_pubkeys: [ffi::XOnlyPublicKey; N] = core::mem::MaybeUninit::uninit().assume_init();
+        // let mut out_pubkeys_ptrs: [*mut ffi::XOnlyPublicKey; N] = core::mem::MaybeUninit::uninit().assume_init();
         let mut out_pubkeys = vec![ffi::XOnlyPublicKey::new(); n_tx_outputs];
         let mut out_pubkeys_ptrs: Vec<_> = out_pubkeys.iter_mut().map(|k| k as *mut _).collect();
+
+        for (i, pubkey) in out_pubkeys.iter_mut().enumerate() {
+            out_pubkeys_ptrs[i] = pubkey as *mut _;
+        }
 
         let ffi_recipients_ptrs: &mut [*const ffi::SilentpaymentsRecipient] =
                     transmute::<&mut [&SilentpaymentsRecipient], &mut [*const ffi::SilentpaymentsRecipient]>(recipients);
 
-        let fii_taproot_seckeys = if taproot_seckeys.is_some() {
-            let result: &[*const ffi::Keypair] =
-                    transmute::<&[&Keypair], &[*const ffi::Keypair]>(taproot_seckeys.unwrap());
-            result
-        } else {
-            &[]
+        let (ffi_taproot_seckeys, n_taproot_seckeys) = match taproot_seckeys {
+            Some(keys) => {
+                let ffi_keys: &[*const ffi::Keypair] = transmute::<&[&Keypair], &[*const ffi::Keypair]>(taproot_seckeys.unwrap());
+                (ffi_keys.as_c_ptr(), keys.len())
+            }
+            None => (core::ptr::null(), 0),
         };
 
-        let n_taproot_seckeys = if taproot_seckeys.is_some() {
-            taproot_seckeys.unwrap().len()
-        } else {
-            0
-        };
-
-        let fii_plain_seckeys = if plain_seckeys.is_some() {
-            let result: &[*const u8] =
-                    transmute::<&[&SecretKey], &[*const u8]>(plain_seckeys.unwrap());
-            result
-        } else {
-            &[]
-        };
-
-        let n_plain_seckeys = if plain_seckeys.is_some() {
-            plain_seckeys.unwrap().len()
-        } else {
-            0
+        let (ffi_plain_seckeys, n_plain_seckeys) = match plain_seckeys {
+            Some(keys) => {
+                let ffi_keys: &[*const u8] = transmute::<&[&SecretKey], &[*const u8]>(plain_seckeys.unwrap());
+                (ffi_keys.as_c_ptr(), keys.len())
+            }
+            None => (core::ptr::null(), 0),
         };
 
         let res = secp256k1_silentpayments_sender_create_outputs(
@@ -117,9 +111,9 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
             ffi_recipients_ptrs.as_mut_ptr(),
             n_tx_outputs,
             smallest_outpoint.as_ptr(),
-            if taproot_seckeys.is_some() { fii_taproot_seckeys.as_c_ptr() } else { std::ptr::null() },
+            ffi_taproot_seckeys,
             n_taproot_seckeys,
-            if plain_seckeys.is_some() { fii_plain_seckeys.as_ptr() } else { std::ptr::null() },
+            ffi_plain_seckeys,
             n_plain_seckeys,
         );
 
@@ -128,9 +122,7 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
         } else {
             Err(SenderOutputCreationError::Failure)
         }
-    };
-
-    result
+    }
 }
 
 /// Struct to store label tweak result
