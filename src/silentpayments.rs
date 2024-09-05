@@ -77,8 +77,6 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
     let n_tx_outputs = recipients.len();
 
     unsafe {
-        // let mut out_pubkeys: [ffi::XOnlyPublicKey; N] = core::mem::MaybeUninit::uninit().assume_init();
-        // let mut out_pubkeys_ptrs: [*mut ffi::XOnlyPublicKey; N] = core::mem::MaybeUninit::uninit().assume_init();
         let mut out_pubkeys = vec![ffi::XOnlyPublicKey::new(); n_tx_outputs];
         let mut out_pubkeys_ptrs: Vec<_> = out_pubkeys.iter_mut().map(|k| k as *mut _).collect();
 
@@ -410,7 +408,7 @@ impl fmt::Display for OutputScanError {
 /// Scan for Silent Payment transaction outputs.
 pub fn silentpayments_recipient_scan_outputs<C: Verification, L>(
     secp: &Secp256k1<C>,
-    tx_outputs: &[XOnlyPublicKey],
+    tx_outputs: &[&XOnlyPublicKey],
     recipient_scan_key: &SecretKey,
     public_data: &SilentpaymentsPublicData,
     recipient_spend_pubkey: &PublicKey,
@@ -426,25 +424,17 @@ pub fn silentpayments_recipient_scan_outputs<C: Verification, L>(
     let mut out_found_output = vec![ffi::SilentpaymentsFoundOutput::empty(); n_tx_outputs];
     let mut out_found_output_ptrs: Vec<_> = out_found_output.iter_mut().map(|k| k as *mut _).collect();
 
-    let ffi_tx_outputs: Vec<ffi::XOnlyPublicKey>  = tx_outputs
-            .iter()
-            .map(|tx_output| unsafe { (*tx_output.as_c_ptr()).clone() })
-            .collect();
-
-    let ffi_tx_outputs_ptrs: Vec<_> = ffi_tx_outputs
-            .iter()
-            .map(|tx_output| tx_output as *const ffi::XOnlyPublicKey)
-            .collect();
-
     let mut n_found_outputs: usize = 0;
 
     let res = unsafe {
+
+        let ffi_tx_outputs: &[*const ffi::XOnlyPublicKey] = transmute::<&[&XOnlyPublicKey], &[*const ffi::XOnlyPublicKey]>(tx_outputs);
 
         secp256k1_silentpayments_recipient_scan_outputs(
             cx,
             out_found_output_ptrs.as_mut_c_ptr(),
             &mut n_found_outputs,
-            ffi_tx_outputs_ptrs.as_c_ptr(),
+            ffi_tx_outputs.as_c_ptr(),
             n_tx_outputs,
             recipient_scan_key.as_c_ptr(),
             public_data.as_c_ptr(),

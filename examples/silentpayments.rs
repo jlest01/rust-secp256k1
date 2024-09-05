@@ -240,13 +240,14 @@ fn main() {
         &cache as *const LabelsCache as *const c_void
     );
 
-    let tx_outputs_slice = tx_outputs.as_slice();
+    let tx_outputs_slice_ref: Vec<&XOnlyPublicKey> = tx_outputs.iter().collect();
+    let tx_outputs_slice_ref = tx_outputs_slice_ref.as_slice();
 
     let bob_spend_publickey = PublicKey::from_slice(&bob_spend_pubkey).unwrap();
 
     let found_output = silentpayments_recipient_scan_outputs(
         &secp,
-        tx_outputs_slice,
+        tx_outputs_slice_ref,
         &bob_scan_secretkey,
         &public_data,
         &bob_spend_publickey,
