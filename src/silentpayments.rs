@@ -74,7 +74,7 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
     plain_seckeys: Option<&[&SecretKey]>,
 ) -> Result<Vec<XOnlyPublicKey>, SenderOutputCreationError> {
     let cx = secp.ctx().as_ptr();
-    let n_tx_outputs = recipients.len();  // N is known at compile-time as a const.
+    let n_tx_outputs = recipients.len();
 
     unsafe {
         // let mut out_pubkeys: [ffi::XOnlyPublicKey; N] = core::mem::MaybeUninit::uninit().assume_init();
@@ -244,57 +244,40 @@ impl SilentpaymentsPublicData {
     pub fn create<C: Verification>(
         secp: &Secp256k1<C>,
         smallest_outpoint: &[u8; 36],
-        xonly_pubkeys: Option<&[XOnlyPublicKey]>,
-        plain_pubkeys: Option<&[PublicKey]>,
+        xonly_pubkeys: Option<&[&XOnlyPublicKey]>,
+        plain_pubkeys: Option<&[&PublicKey]>,
     ) -> Result<Self, SilentpaymentsPublicDataError> {
 
         let cx = secp.ctx().as_ptr();
-
-        // Create vectors to hold the data, ensuring it stays in scope
-        let mut ffi_xonly_pubkeys = Vec::new();
-        let mut ffi_xonly_pubkeys_ptrs = Vec::new();
-        let mut ffi_plain_pubkeys = Vec::new();
-        let mut ffi_plain_pubkeys_ptrs = Vec::new();
-
-        // Populate xonly pubkeys if provided
-        if let Some(xonly_pubkeys) = xonly_pubkeys {
-            ffi_xonly_pubkeys = xonly_pubkeys
-                .iter()
-                .map(|xonly_pubkey| unsafe { (*xonly_pubkey.as_c_ptr()).clone() })
-                .collect();
-            ffi_xonly_pubkeys_ptrs = ffi_xonly_pubkeys
-                .iter()
-                .map(|keypair| keypair as *const ffi::XOnlyPublicKey)
-                .collect();
-        }
-
-        // Populate taproot seckeys if provided
-        if let Some(plain_pubkeys) = plain_pubkeys {
-            ffi_plain_pubkeys = plain_pubkeys
-                .iter()
-                .map(|plain_pubkey| unsafe { (*plain_pubkey.as_c_ptr()).clone() })
-                .collect();
-            ffi_plain_pubkeys_ptrs = ffi_plain_pubkeys
-                .iter()
-                .map(|keypair| keypair as *const ffi::PublicKey)
-                .collect();
-        }
-
-        let n_xonly_pubkeys = ffi_xonly_pubkeys.len();
-        let n_plain_pubkeys = ffi_plain_pubkeys.len();
 
         unsafe {
             
             let empty_data = [0u8; constants::SILENT_PAYMENTS_PUBLIC_DATA_SIZE];
             let mut silentpayments_public_data = ffi::SilentpaymentsPublicData::from_array(empty_data);
 
+            let (ffi_xonly_pubkeys, n_xonly_pubkeys) = match xonly_pubkeys {
+                Some(keys) => {
+                    let ffi_keys: &[*const ffi::XOnlyPublicKey] = transmute::<&[&XOnlyPublicKey], &[*const ffi::XOnlyPublicKey]>(xonly_pubkeys.unwrap());
+                    (ffi_keys.as_c_ptr(), keys.len())
+                }
+                None => (core::ptr::null(), 0),
+            };
+
+            let (ffi_plain_pubkeys, n_plain_pubkeys) = match plain_pubkeys {
+                Some(keys) => {
+                    let ffi_keys: &[*const ffi::PublicKey] = transmute::<&[&PublicKey], &[*const ffi::PublicKey]>(plain_pubkeys.unwrap());
+                    (ffi_keys.as_c_ptr(), keys.len())
+                }
+                None => (core::ptr::null(), 0),
+            };
+
             let res = secp256k1_silentpayments_recipient_public_data_create(
                 cx,
                 &mut silentpayments_public_data,
                 smallest_outpoint.as_c_ptr(),
-                if !ffi_xonly_pubkeys_ptrs.is_empty() { ffi_xonly_pubkeys_ptrs.as_ptr() } else { std::ptr::null() },
+                ffi_xonly_pubkeys,
                 n_xonly_pubkeys,
-                if !ffi_plain_pubkeys_ptrs.is_empty() { ffi_plain_pubkeys_ptrs.as_ptr() } else { std::ptr::null() },
+                ffi_plain_pubkeys,
                 n_plain_pubkeys,
             );
 

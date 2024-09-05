@@ -161,7 +161,7 @@ fn main() {
 
     let recipients = recipients.as_slice();
     let mut recipients_ref: Vec<&SilentpaymentsRecipient> = recipients.iter().collect();
-    let mut recipients_ref = recipients_ref.as_mut_slice();
+    let recipients_ref = recipients_ref.as_mut_slice();
 
     let mut taproot_seckeys = Vec::<Keypair>::new();
 
@@ -213,10 +213,13 @@ fn main() {
         &label_tweak_result.pubkey
     ).unwrap();
 
+    let tx_inputs_ref: Vec<&XOnlyPublicKey> = tx_inputs.iter().collect();
+    let tx_inputs_ref = tx_inputs_ref.as_slice();
+
     let public_data: SilentpaymentsPublicData = SilentpaymentsPublicData::create(
         &secp,
         &smallest_outpoint,
-        Some(&tx_inputs),
+        Some(tx_inputs_ref),
         None
     ).unwrap();
 
