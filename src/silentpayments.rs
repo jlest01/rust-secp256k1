@@ -230,14 +230,6 @@ impl SilentpaymentsPublicData {
         SilentpaymentsPublicData(ffi::SilentpaymentsPublicData::from_array(empty_data))
     }
 
-    /// Creates an `SilentpaymentsPublicData` object from a 98-byte array.
-    pub fn from_array(data: [u8; 98]) -> SilentpaymentsPublicData {
-        SilentpaymentsPublicData(ffi::SilentpaymentsPublicData::from_array(data))
-    }
-
-    /// Returns the 64-byte array representation of this `SilentpaymentsPublicData` object.
-    pub fn to_array(&self) -> [u8; 98] { self.0.to_array() }
-
     /// Compute Silent Payment public data from input public keys and transaction inputs
     pub fn create<C: Verification>(
         secp: &Secp256k1<C>,
