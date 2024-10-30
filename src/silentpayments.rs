@@ -80,10 +80,6 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
         let mut out_pubkeys = vec![ffi::XOnlyPublicKey::new(); n_tx_outputs];
         let mut out_pubkeys_ptrs: Vec<_> = out_pubkeys.iter_mut().map(|k| k as *mut _).collect();
 
-        for (i, pubkey) in out_pubkeys.iter_mut().enumerate() {
-            out_pubkeys_ptrs[i] = pubkey as *mut _;
-        }
-
         let ffi_recipients_ptrs: &mut [*const ffi::SilentpaymentsRecipient] =
                     transmute::<&mut [&SilentpaymentsRecipient], &mut [*const ffi::SilentpaymentsRecipient]>(recipients);
 
