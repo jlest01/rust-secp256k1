@@ -349,6 +349,7 @@ impl SilentpaymentsPublicData {
 }
 
 /// Found outputs struct
+#[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SilentpaymentsFoundOutput(ffi::SilentpaymentsFoundOutput);
 
@@ -441,15 +442,17 @@ pub fn silentpayments_recipient_scan_outputs<C: Verification, L>(
     };
 
     if res == 1 {
+        let capacity = n_found_outputs;
+        let ptr = out_found_output.as_mut_ptr();
 
-        let mut result = vec![SilentpaymentsFoundOutput::empty(); n_found_outputs];
+        // Prevent original vector from running its destructor
+        forget(out_found_output);
         
-        for i in 0..n_found_outputs {
-            result[i] = SilentpaymentsFoundOutput(out_found_output[i]);
-
-        }
-        
-        Ok(result)
+        Ok(unsafe { Vec::from_raw_parts(
+            ptr as *mut SilentpaymentsFoundOutput,
+            n_found_outputs,
+            capacity
+        ) })
     } else {
         Err(OutputScanError::Failure)
     }
