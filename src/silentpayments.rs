@@ -183,9 +183,9 @@ pub fn silentpayments_recipient_create_label_tweak<C: Verification>(
             let pubkey = PublicKey::from(pubkey);
             let label_tweak = label_tweak32;
 
-            return Ok(LabelTweakResult { pubkey, label_tweak });
+            Ok(LabelTweakResult { pubkey, label_tweak })
         } else {
-            return Err(LabelTweakError::Failure);
+            Err(LabelTweakError::Failure)
         }
     }
 }
