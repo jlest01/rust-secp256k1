@@ -3,7 +3,7 @@
 use core::ffi::c_void;
 use core::fmt;
 
-use core::mem::transmute;
+use core::mem::{forget, transmute};
 #[cfg(feature = "std")]
 use std;
 
@@ -112,7 +112,19 @@ pub fn silentpayments_sender_create_outputs<C: Verification>(
         );
 
         if res == 1 {
-            Ok(out_pubkeys.into_iter().map(XOnlyPublicKey::from).collect())
+
+            let length = out_pubkeys.len();
+            let capacity = out_pubkeys.capacity();
+            let ptr = out_pubkeys.as_mut_ptr();
+            
+            // Prevent original vector from running its destructor
+            forget(out_pubkeys);
+            
+            Ok(Vec::from_raw_parts(
+                ptr as *mut XOnlyPublicKey,
+                length,
+                capacity
+            ))
         } else {
             Err(SenderOutputCreationError::Failure)
         }
