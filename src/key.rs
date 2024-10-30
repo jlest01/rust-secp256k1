@@ -1090,6 +1090,7 @@ impl CPtr for Keypair {
 /// ```
 /// [`bincode`]: https://docs.rs/bincode
 /// [`cbor`]: https://docs.rs/cbor
+#[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct XOnlyPublicKey(ffi::XOnlyPublicKey);
 impl_fast_comparisons!(XOnlyPublicKey);
