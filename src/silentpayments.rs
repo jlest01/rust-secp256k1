@@ -249,9 +249,8 @@ impl SilentpaymentsPublicData {
         let cx = secp.ctx().as_ptr();
 
         unsafe {
-            
-            let empty_data = [0u8; constants::SILENT_PAYMENTS_PUBLIC_DATA_SIZE];
-            let mut silentpayments_public_data = ffi::SilentpaymentsPublicData::from_array(empty_data);
+
+            let mut silentpayments_public_data = Self::new();
 
             let (ffi_xonly_pubkeys, n_xonly_pubkeys) = match xonly_pubkeys {
                 Some(keys) => {
@@ -271,7 +270,7 @@ impl SilentpaymentsPublicData {
 
             let res = secp256k1_silentpayments_recipient_public_data_create(
                 cx,
-                &mut silentpayments_public_data,
+                silentpayments_public_data.as_mut_c_ptr(),
                 smallest_outpoint.as_c_ptr(),
                 ffi_xonly_pubkeys,
                 n_xonly_pubkeys,
@@ -280,7 +279,6 @@ impl SilentpaymentsPublicData {
             );
 
             if res == 1 {
-                let silentpayments_public_data = SilentpaymentsPublicData(silentpayments_public_data);
                 Ok(silentpayments_public_data)
             } else {
                 Err(SilentpaymentsPublicDataError::CreationFailure)
@@ -312,19 +310,17 @@ impl SilentpaymentsPublicData {
     /// Parse a 33-byte sequence into a silent_payments_public_data object.
     pub fn parse<C: Verification>(secp: &Secp256k1<C>, input33: &[u8; 33]) -> Result<Self, SilentpaymentsPublicDataError> {
 
-        let empty_data = [0u8; constants::SILENT_PAYMENTS_PUBLIC_DATA_SIZE];
-        let mut silentpayments_public_data = ffi::SilentpaymentsPublicData::from_array(empty_data);
+        let mut silentpayments_public_data = Self::new();
 
         let res = unsafe {
             secp256k1_silentpayments_recipient_public_data_parse(
                 secp.ctx().as_ptr(),
-                &mut silentpayments_public_data,
+                silentpayments_public_data.as_mut_c_ptr(),
                 input33.as_c_ptr(),
             )
         };
 
         if res == 1 {
-            let silentpayments_public_data = SilentpaymentsPublicData(silentpayments_public_data);
             Ok(silentpayments_public_data)
         } else {
             Err(SilentpaymentsPublicDataError::ParseFailure)
