@@ -21,6 +21,8 @@ typedef struct rustsecp256k1_v0_10_0_scratch_space_struct {
     size_t max_size;
 } rustsecp256k1_v0_10_0_scratch;
 
+typedef struct rustsecp256k1_v0_10_0_scratch_space_struct rustsecp256k1_v0_10_0_scratch_space;
+
 static rustsecp256k1_v0_10_0_scratch* rustsecp256k1_v0_10_0_scratch_create(const rustsecp256k1_v0_10_0_callback* error_callback, size_t max_size);
 
 static void rustsecp256k1_v0_10_0_scratch_destroy(const rustsecp256k1_v0_10_0_callback* error_callback, rustsecp256k1_v0_10_0_scratch* scratch);
