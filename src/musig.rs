@@ -7,11 +7,11 @@
 //! can be found in [C-musig.md](secp256k1-sys/depend/secp256k1/src/modules/musig/musig.md).
 use core;
 use core::fmt;
-use core::mem::transmute;
+use core::mem::{transmute, MaybeUninit};
 #[cfg(feature = "std")]
 use std;
 
-use secp256k1_sys::{secp256k1_ec_pubkey_sort, MUSIG_SECNONCE_LEN};
+use secp256k1_sys::secp256k1_ec_pubkey_sort;
 
 use crate::ffi::{self, CPtr};
 use crate::{
@@ -22,13 +22,6 @@ use crate::{
 /// Musig partial signature parsing errors
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum ParseError {
-    /// Length mismatch
-    InvalidLength {
-        /// Expected size.
-        expected: usize,
-        /// Actual size.
-        got: usize,
-    },
     /// Parse Argument is malformed. This might occur if the point is on the secp order,
     /// or if the secp scalar is outside of group order
     MalformedArg,
@@ -40,29 +33,26 @@ impl std::error::Error for ParseError {}
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
-            ParseError::InvalidLength { expected, got } => {
-                write!(f, "Argument must be {} bytes, got {}", expected, got)
-            }
             ParseError::MalformedArg => write!(f, "Malformed parse argument"),
         }
     }
 }
 
 /// Session Id for a MuSig session.
-///
-/// # NOTE:
-///
-/// Each call to this nonce generation APIs must have a UNIQUE session_id. This must NOT BE
-/// REUSED in subsequent calls to nonce generation APIs such as [`MusigKeyAggCache::nonce_gen`]
-/// or [`new_musig_nonce_pair`].
 #[allow(missing_copy_implementations)]
 #[derive(Debug, Eq, PartialEq)]
 pub struct MusigSecRand([u8; 32]);
 
 impl MusigSecRand {
+    /// Generates a new session ID using thread RNG.
+    #[cfg(all(feature = "rand", feature = "std"))]
+    pub fn new() -> Self {
+        Self::from_rng(&mut rand::thread_rng())
+    }
+
     /// Creates a new [`MusigSecRand`] with random bytes from the given rng
     #[cfg(feature = "rand")]
-    pub fn new<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
+    pub fn from_rng<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
         let session_id = crate::random_32_bytes(rng);
         MusigSecRand(session_id)
     }
@@ -71,8 +61,7 @@ impl MusigSecRand {
     ///
     /// Special care must be taken that the bytes are unique for each call to
     /// [`MusigKeyAggCache::nonce_gen`] or [`new_musig_nonce_pair`]. The simplest
-    /// recommendation is to use a random 32-byte value. Refer to upstream libsecp256k1-zkp
-    /// documentation for more details.
+    /// recommendation is to use a cryptographicaly random 32-byte value.
     ///
     /// In rand-std environment, [`MusigSecRand::new`] can be used to generate a random
     /// session id using thread rng.
@@ -112,8 +101,7 @@ impl fmt::Display for MusigTweakErr {
         match self {
             MusigTweakErr::InvalidTweak => write!(
                 f,
-                "Invalid Tweak: This only happens when
-                tweak is negation of secret key"
+                "The tweak is negation of secret key"
             ),
         }
     }
@@ -206,8 +194,8 @@ pub fn new_musig_nonce_pair<C: Signing>(
     let msg_ptr = msg.as_ref().map(|e| e.as_c_ptr()).unwrap_or(core::ptr::null());
     let cache_ptr = key_agg_cache.map(|e| e.as_ptr()).unwrap_or(core::ptr::null());
     unsafe {
-        let mut sec_nonce = MusigSecNonce(ffi::MusigSecNonce::new());
-        let mut pub_nonce = MusigPubNonce(ffi::MusigPubNonce::new());
+        let mut sec_nonce = MaybeUninit::<ffi::MusigSecNonce>::uninit();
+        let mut pub_nonce = MaybeUninit::<ffi::MusigPubNonce>::uninit();
         if ffi::secp256k1_musig_nonce_gen(
             cx,
             sec_nonce.as_mut_ptr(),
@@ -228,6 +216,8 @@ pub fn new_musig_nonce_pair<C: Signing>(
             // This can only happen when the session id is all zeros
             Err(MusigNonceGenError::ZeroSession)
         } else {
+            let pub_nonce = MusigPubNonce(pub_nonce.assume_init());
+            let sec_nonce = MusigSecNonce(sec_nonce.assume_init());
             Ok((sec_nonce, pub_nonce))
         }
     }
@@ -273,23 +263,19 @@ impl MusigPartialSignature {
     ///
     /// # Errors:
     ///
-    /// - ArgLenMismatch: If the signature is not 32 bytes
-    /// - MalformedArg: If the signature is 32 bytes, but out of curve order
-    pub fn from_slice(data: &[u8]) -> Result<Self, ParseError> {
-        let mut part_sig = MusigPartialSignature(ffi::MusigPartialSignature::new());
-        if data.len() != 32 {
-            return Err(ParseError::InvalidLength { expected: 32, got: data.len() });
-        }
+    /// - MalformedArg: If the signature [`MusigPartialSignature`] is 32 bytes, but out of curve order
+    pub fn from_slice(data: &[u8; ffi::MUSIG_PART_SIG_LEN]) -> Result<Self, ParseError> {
+        let mut partial_sig = MaybeUninit::<ffi::MusigPartialSignature>::uninit();
         unsafe {
             if ffi::secp256k1_musig_partial_sig_parse(
                 ffi::secp256k1_context_no_precomp,
-                part_sig.as_mut_ptr(),
+                partial_sig.as_mut_ptr(),
                 data.as_ptr(),
             ) == 0
             {
                 Err(ParseError::MalformedArg)
             } else {
-                Ok(part_sig)
+                Ok(MusigPartialSignature(partial_sig.assume_init()))
             }
         }
     }
@@ -341,7 +327,8 @@ impl MusigKeyAggCache {
     pub fn new<C: Verification>(secp: &Secp256k1<C>, pubkey_ptrs: &[&PublicKey]) -> Self {
         let cx = secp.ctx().as_ptr();
 
-        let mut key_agg_cache = ffi::MusigKeyAggCache::new();
+        let mut key_agg_cache = MaybeUninit::<ffi::MusigKeyAggCache>::uninit();
+        let mut agg_pk = MaybeUninit::<ffi::XOnlyPublicKey>::uninit();
 
         unsafe {
             let pubkeys: &[*const ffi::PublicKey] =
@@ -351,11 +338,10 @@ impl MusigKeyAggCache {
                 unreachable!("Invalid public keys for sorting function")
             }
 
-            let mut agg_pk = XOnlyPublicKey::from(ffi::XOnlyPublicKey::new());
             if ffi::secp256k1_musig_pubkey_agg(
                 cx,
-                agg_pk.as_mut_c_ptr(),
-                &mut key_agg_cache,
+                agg_pk.as_mut_ptr(),
+                key_agg_cache.as_mut_ptr(),
                 pubkeys.as_ptr(),
                 pubkey_ptrs.len(),
             ) == 0
@@ -363,6 +349,9 @@ impl MusigKeyAggCache {
                 // Returns 0 only if the keys are malformed that never happens in safe rust type system.
                 unreachable!("Invalid XOnlyPublicKey in input pubkeys")
             } else {
+                // secp256k1_musig_pubkey_agg overwrites the cache and the key so this is sound.
+                let key_agg_cache = key_agg_cache.assume_init();
+                let agg_pk = XOnlyPublicKey::from(agg_pk.assume_init());
                 MusigKeyAggCache(key_agg_cache, agg_pk)
             }
         }
@@ -605,7 +594,7 @@ impl MusigKeyAggCache {
 /// structure in memory can use the provided API functions for a safe standard
 /// workflow.
 ///
-/// Signers that pre-computes and saves these nonces are not yet supported. Users
+/// Signers that pre-compute and save these nonces are not yet supported. Users
 /// who want to serialize this must use unsafe rust to do so.
 #[allow(missing_copy_implementations)]
 #[derive(Debug)]
@@ -625,26 +614,6 @@ impl MusigSecNonce {
 
     /// Get a mut pointer to the inner MusigKeyAggCache
     pub fn as_mut_ptr(&mut self) -> *mut ffi::MusigSecNonce { &mut self.0 }
-
-    /// Function to return a copy of the internal array. See WARNING before using this function.
-    ///
-    /// # Warning:
-    ///  This structure MUST NOT be copied or read or written to directly. A
-    ///  signer who is online throughout the whole process and can keep this
-    ///  structure in memory can use the provided API functions for a safe standard
-    ///  workflow. See
-    ///  <https://blockstream.com/2019/02/18/musig-a-new-multisignature-standard/> for
-    ///  more details about the risks associated with serializing or deserializing
-    ///  this structure.
-    ///
-    ///  We repeat, copying this data structure can result in nonce reuse which will
-    ///  leak the secret signing key.
-    pub fn dangerous_into_bytes(self) -> [u8; MUSIG_SECNONCE_LEN] { self.0.dangerous_into_bytes() }
-
-    /// Function to create a new MusigKeyAggCoef from a 32 byte array. See WARNING before using this function.
-    pub fn dangerous_from_bytes(array: [u8; MUSIG_SECNONCE_LEN]) -> Self {
-        MusigSecNonce(ffi::MusigSecNonce::dangerous_from_bytes(array))
-    }
 }
 
 /// An individual MuSig public nonce. Not to be confused with [`MusigAggNonce`].
@@ -683,26 +652,19 @@ impl MusigPubNonce {
     ///
     /// # Errors:
     ///
-    /// - ArgLenMismatch: If the [`MusigPubNonce`] is not 132 bytes
     /// - MalformedArg: If the [`MusigPubNonce`] is 132 bytes, but out of curve order
-    pub fn from_slice(data: &[u8]) -> Result<Self, ParseError> {
-        let mut pubnonce = MusigPubNonce(ffi::MusigPubNonce::new());
-        if data.len() != ffi::MUSIG_PUBNONCE_SERIALIZED_LEN {
-            return Err(ParseError::InvalidLength {
-                expected: ffi::MUSIG_PUBNONCE_SERIALIZED_LEN,
-                got: data.len(),
-            });
-        }
+    pub fn from_slice(data: &[u8; ffi::MUSIG_PUBNONCE_SERIALIZED_LEN]) -> Result<Self, ParseError> {
+        let mut pub_nonce = MaybeUninit::<ffi::MusigPubNonce>::uninit();
         unsafe {
             if ffi::secp256k1_musig_pubnonce_parse(
                 ffi::secp256k1_context_no_precomp,
-                pubnonce.as_mut_ptr(),
+                pub_nonce.as_mut_ptr(),
                 data.as_ptr(),
             ) == 0
             {
                 Err(ParseError::MalformedArg)
             } else {
-                Ok(pubnonce)
+                Ok(MusigPubNonce(pub_nonce.assume_init()))
             }
         }
     }
@@ -764,7 +726,7 @@ impl MusigAggNonce {
     /// # }
     /// ```
     pub fn new<C: Signing>(secp: &Secp256k1<C>, nonce_ptrs: &[&MusigPubNonce]) -> Self {
-        let mut aggnonce = MusigAggNonce(ffi::MusigAggNonce::new());
+        let mut aggnonce = MaybeUninit::<ffi::MusigAggNonce>::uninit();
 
         unsafe {
             let pubnonces: &[*const ffi::MusigPubNonce] =
@@ -781,7 +743,7 @@ impl MusigAggNonce {
                 // Note that even if aggregate nonce is point at infinity, the musig spec sets it as `G`
                 unreachable!("Public key nonces are well-formed and valid in rust typesystem")
             } else {
-                aggnonce
+                MusigAggNonce(aggnonce.assume_init())
             }
         }
     }
@@ -808,16 +770,9 @@ impl MusigAggNonce {
     ///
     /// # Errors:
     ///
-    /// - ArgLenMismatch: If the slice is not 66 bytes
     /// - MalformedArg: If the byte slice is 66 bytes, but the [`MusigAggNonce`] is invalid
-    pub fn from_slice(data: &[u8]) -> Result<Self, ParseError> {
-        if data.len() != ffi::MUSIG_AGGNONCE_SERIALIZED_LEN {
-            return Err(ParseError::InvalidLength {
-                expected: ffi::MUSIG_AGGNONCE_SERIALIZED_LEN,
-                got: data.len(),
-            });
-        }
-        let mut aggnonce = MusigAggNonce(ffi::MusigAggNonce::new());
+    pub fn from_slice(data: &[u8; ffi::MUSIG_AGGNONCE_SERIALIZED_LEN]) -> Result<Self, ParseError> {
+        let mut aggnonce = MaybeUninit::<ffi::MusigAggNonce>::uninit();
         unsafe {
             if ffi::secp256k1_musig_aggnonce_parse(
                 ffi::secp256k1_context_no_precomp,
@@ -827,7 +782,7 @@ impl MusigAggNonce {
             {
                 Err(ParseError::MalformedArg)
             } else {
-                Ok(aggnonce)
+                Ok(MusigAggNonce(aggnonce.assume_init()))
             }
         }
     }
@@ -905,7 +860,7 @@ impl MusigSession {
         agg_nonce: MusigAggNonce,
         msg: Message,
     ) -> Self {
-        let mut session = MusigSession(ffi::MusigSession::new());
+        let mut session = MaybeUninit::<ffi::MusigSession>::uninit();
 
         unsafe {
             if ffi::secp256k1_musig_nonce_process(
@@ -921,7 +876,7 @@ impl MusigSession {
                 unreachable!("Impossible to construct invalid arguments in safe rust.
                     Also reaches here if R1 + R2*b == point at infinity, but only occurs with 1/1^128 probability")
             } else {
-                session
+                MusigSession(session.assume_init())
             }
         }
     }
@@ -956,7 +911,8 @@ impl MusigSession {
         key_agg_cache: &MusigKeyAggCache,
     ) -> Result<MusigPartialSignature, MusigSignError> {
         unsafe {
-            let mut partial_sig = MusigPartialSignature(ffi::MusigPartialSignature::new());
+            let mut partial_sig = MaybeUninit::<ffi::MusigPartialSignature>::uninit();
+
             if ffi::secp256k1_musig_partial_sign(
                 secp.ctx().as_ptr(),
                 partial_sig.as_mut_ptr(),
@@ -970,7 +926,7 @@ impl MusigSession {
                 // this will fail if the nonce was reused.
                 Err(MusigSignError::NonceReuse)
             } else {
-                Ok(partial_sig)
+                Ok(MusigPartialSignature(partial_sig.assume_init()))
             }
         }
     }

@@ -1254,45 +1254,11 @@ pub struct MusigKeyAggCache([c_uchar; MUSIG_KEYAGG_LEN]);
 impl_array_newtype!(MusigKeyAggCache, c_uchar, MUSIG_KEYAGG_LEN);
 impl_raw_debug!(MusigKeyAggCache);
 
-impl MusigKeyAggCache {
-    pub fn new() -> Self {
-        MusigKeyAggCache([0; MUSIG_KEYAGG_LEN])
-    }
-}
-
-impl Default for MusigKeyAggCache {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct MusigSecNonce(pub(crate) [c_uchar; MUSIG_SECNONCE_LEN]);
+pub struct MusigSecNonce([c_uchar; MUSIG_SECNONCE_LEN]);
 impl_array_newtype!(MusigSecNonce, c_uchar, MUSIG_SECNONCE_LEN);
 impl_raw_debug!(MusigSecNonce);
-
-impl MusigSecNonce {
-    pub fn new() -> Self {
-        MusigSecNonce([0; MUSIG_SECNONCE_LEN])
-    }
-
-    // No need for strong warning here, the user cannot use the ffi types directly in any of the APIs
-    pub fn dangerous_from_bytes(bytes: [c_uchar; MUSIG_SECNONCE_LEN]) -> Self {
-        MusigSecNonce(bytes)
-    }
-
-    // No need for strong warning here, the user cannot use the ffi types directly in any of the high level APIs
-    pub fn dangerous_into_bytes(self) -> [c_uchar; MUSIG_SECNONCE_LEN] {
-        self.0
-    }
-}
-
-impl Default for MusigSecNonce {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -1300,35 +1266,11 @@ pub struct MusigPubNonce([c_uchar; MUSIG_PUBNONCE_LEN]);
 impl_array_newtype!(MusigPubNonce, c_uchar, MUSIG_PUBNONCE_LEN);
 impl_raw_debug!(MusigPubNonce);
 
-impl MusigPubNonce {
-    pub fn new() -> Self {
-        MusigPubNonce([0; MUSIG_PUBNONCE_LEN])
-    }
-}
-
-impl Default for MusigPubNonce {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigAggNonce([c_uchar; MUSIG_AGGNONCE_LEN]);
 impl_array_newtype!(MusigAggNonce, c_uchar, MUSIG_AGGNONCE_LEN);
 impl_raw_debug!(MusigAggNonce);
-
-impl MusigAggNonce {
-    pub fn new() -> Self {
-        MusigAggNonce([0; MUSIG_AGGNONCE_LEN])
-    }
-}
-
-impl Default for MusigAggNonce {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -1336,35 +1278,11 @@ pub struct MusigSession([c_uchar; MUSIG_SESSION_LEN]);
 impl_array_newtype!(MusigSession, c_uchar, MUSIG_SESSION_LEN);
 impl_raw_debug!(MusigSession);
 
-impl MusigSession {
-    pub fn new() -> Self {
-        MusigSession([0; MUSIG_SESSION_LEN])
-    }
-}
-
-impl Default for MusigSession {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MusigPartialSignature([c_uchar; MUSIG_PART_SIG_LEN]);
 impl_array_newtype!(MusigPartialSignature, c_uchar, MUSIG_PART_SIG_LEN);
 impl_raw_debug!(MusigPartialSignature);
-
-impl MusigPartialSignature {
-    pub fn new() -> Self {
-        MusigPartialSignature([0; MUSIG_PART_SIG_LEN])
-    }
-}
-
-impl Default for MusigPartialSignature {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 #[cfg(secp256k1_fuzz)]
 mod fuzz_dummy {

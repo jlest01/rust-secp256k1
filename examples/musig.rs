@@ -37,7 +37,7 @@ fn main() {
     let msg_bytes: [u8; 32] = *b"this_could_be_the_hash_of_a_msg!";
     let msg = Message::from_digest_slice(&msg_bytes).unwrap();
 
-    let musig_session_sec_rand1 = MusigSecRand::new(&mut rng);
+    let musig_session_sec_rand1 = MusigSecRand::from_rng(&mut rng);
 
     let nonce_pair1 = new_musig_nonce_pair(
         &secp,
@@ -50,7 +50,7 @@ fn main() {
     )
     .unwrap();
 
-    let musig_session_sec_rand2 = MusigSecRand::new(&mut rng);
+    let musig_session_sec_rand2 = MusigSecRand::from_rng(&mut rng);
 
     let nonce_pair2 = new_musig_nonce_pair(
         &secp,
